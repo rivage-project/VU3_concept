@@ -1,10 +1,11 @@
+
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# VU3\_concept <img src="man/figures/compendium-sticker.png" align="right" style="float:right; height:120px;"/>
+# VU3_concept <img src="man/figures/compendium-sticker.png" align="right" style="float:right; height:120px;"/>
 
 <!-- badges: start -->
 
-[![License: GPL (&gt;=
+[![License: GPL (\>=
 2)](https://img.shields.io/badge/License-GPL%20%28%3E%3D%202%29-blue.svg)](https://choosealicense.com/licenses/gpl-2.0/)
 <!-- badges: end -->
 
@@ -21,7 +22,16 @@
 
 ## Overview
 
-This research compendium… **{{ DESCRIBE YOUR PROJECT }}**
+This research compendium is dedicated to the proof of concept of the
+**RIVAGE** vulnerability framework.
+
+Main goal: define a method to evaluate the vulnerability of a system to
+multiple threats (here, climate change, land-use change and invasive
+alien species) for multiple taxa (here, plants, mammals & birds) and
+according to three components of vulnerability (i.e. exposure,
+sensitivity and adaptive capacity). Secondary goal: test the method on
+well known islands among Hawaii, Canarias, Mascarene islands, Galapagos,
+Azores.
 
 ## Features
 
@@ -32,28 +42,28 @@ FEATURES }}**
 
 This repository is structured as follow:
 
--   [`DESCRIPTION`](https://github.com/rivage-project/VU3_concept/tree/master/DESCRIPTION):
-    contains project metadata (authors, date, dependencies, etc.)
+- [`DESCRIPTION`](https://github.com/rivage-project/VU3_concept/tree/master/DESCRIPTION):
+  contains project metadata (authors, date, dependencies, etc.)
 
--   [`make.R`](https://github.com/rivage-project/VU3_concept/tree/master/make.R):
-    main R script to run the entire project
+- [`make.R`](https://github.com/rivage-project/VU3_concept/tree/master/make.R):
+  main R script to run the entire project
 
--   [`R/`](https://github.com/rivage-project/VU3_concept/tree/master/R):
-    contains R functions developed especially for this project
+- [`R/`](https://github.com/rivage-project/VU3_concept/tree/master/R):
+  contains R functions developed especially for this project
 
--   **{{ LIST ADDITIONAL FILES/FOLDER }}**
+- **{{ LIST ADDITIONAL FILES/FOLDER }}**
 
 ## Installation
 
 To install this compendium:
 
--   [Fork](https://docs.github.com/en/get-started/quickstart/contributing-to-projects)
-    this repository using the GitHub interface.
--   [Clone](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository)
-    your fork using `git clone fork-url` (replace `fork-url` by the URL
-    of your fork). Alternatively, open [RStudio
-    IDE](https://posit.co/products/open-source/rstudio/) and create a
-    New Project from Version Control.
+- [Fork](https://docs.github.com/en/get-started/quickstart/contributing-to-projects)
+  this repository using the GitHub interface.
+- [Clone](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository)
+  your fork using `git clone fork-url` (replace `fork-url` by the URL of
+  your fork). Alternatively, open [RStudio
+  IDE](https://posit.co/products/open-source/rstudio/) and create a New
+  Project from Version Control.
 
 ## Usage
 
@@ -61,14 +71,16 @@ Launch the
 [`make.R`](https://github.com/rivage-project/VU3_concept/tree/master/make.R)
 file with:
 
-    source("make.R")
+``` r
+source("make.R")
+```
 
 **Notes**
 
--   All required packages listed in the `DESCRIPTION` file will be
-    installed (if necessary)
--   All required packages and R functions will be loaded
--   Some analyses listed in the `make.R` might take time
+- All required packages listed in the `DESCRIPTION` file will be
+  installed (if necessary)
+- All required packages and R functions will be loaded
+- Some analyses listed in the `make.R` might take time
 
 ## Citation
 

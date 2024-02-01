@@ -1,6 +1,6 @@
 Package: VU3_concept
 Type: Package
-Title: The Title of the Project
+Title: Proof of concept of the vulnerability framework
 Version: 0.0.0.9000
 Authors@R: c(
     person(given   = "Clara",
@@ -8,8 +8,12 @@ Authors@R: c(
            role    = c("aut", "cre", "cph"),
            email   = "claramarino665@gmail.com",
            comment = c(ORCID = "0000-0003-0470-6062")))
-Description: A paragraph providing a full description of the project (on 
-    several lines...)
+Description: This project aims at designing and testing a method to calculate the vulnerability 
+    of islands to multiple threats, for plants, birds and mammals. The objective is to include three
+    components of vulnerability, namely the exposure, sensitivity and adaptive capacity of insular 
+    biota facing the threats. Here, we will test the vulnerability framework on a subset of well-described 
+    islands in terms of biodiversity data.
+
 URL: https://github.com/rivage-project/VU3_concept
 BugReports: https://github.com/rivage-project/VU3_concept/issues
 License: GPL (>= 2)

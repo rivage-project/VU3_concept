@@ -39,8 +39,10 @@ VU3_concept <img src="man/figures/compendium-sticker.png" align="right" style="f
 
 ## Overview
 
-This research compendium... **{{ DESCRIBE YOUR PROJECT }}**
+This research compendium is dedicated to the proof of concept of the **RIVAGE** vulnerability framework.
 
+Main goal: define a method to evaluate the vulnerability of a system to multiple threats (here, climate change, land-use change and invasive alien species) for multiple taxa (here, plants, mammals & birds) and according to three components of vulnerability (i.e. exposure, sensitivity and adaptive capacity).
+Secondary goal: test the method on well known islands among Hawaii, Canarias, Mascarene islands, Galapagos, Azores.
 
 
 ## Features

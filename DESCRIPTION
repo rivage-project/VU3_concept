@@ -1,6 +1,6 @@
 Package: VU3_concept
 Type: Package
-Title: Proof of concept of the vulnerability framework
+Title: Proof of Concept of the Vulnerability Framework
 Version: 0.0.0.9000
 Authors@R: c(
     person(given   = "Clara",

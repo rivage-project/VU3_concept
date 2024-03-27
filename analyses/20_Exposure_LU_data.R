@@ -1,11 +1,9 @@
 # extract data for Land_use
+# create a database combining the three LU metrics
+# for all selected islands
 
 rm(list=ls())
 
-# library(raster)
-# library(sf)
-# library(sp)
-# library(rgdal)
 library(tidyverse)
 
 path_data <- "Z:/THESE/5_Data/Distribution_spatiale/"
@@ -21,6 +19,7 @@ shp_55 <- subset(gadm_islands, ULM_ID %in% isl_select$ID)
 
 
 ##### Human static change 2017 #####
+
 # Source: Temporal mapping of global human modification from 1990 to 2017
 # https://zenodo.org/record/3963013#.YsQkSITP1D8
 # Associated paper: Theobald et al. 2020
@@ -181,7 +180,7 @@ hist(unlist(lapply(dens_isl, median)), n = 50)
 
 
 
-glp <- shp_55_proj %>% filter(ARCHIP == "Galapagos Islands")
+glp <- shp_55 %>% filter(ARCHIP == "Galapagos Islands")
 ggplot(glp)+geom_sf()
 glp_dens <- terra::crop(rdens,glp)
 terra::plot(glp_dens)
@@ -190,7 +189,7 @@ ggplot() +
   geom_sf(data=glp, fill=NA, color="white")
 
 
-hw <- shp_55_proj %>% filter(ARCHIP == "Mascarene Islands") # Hawaii, Canary Islands, Azores
+hw <- shp_55 %>% filter(ARCHIP == "Azores") # Hawaii, Canary Islands, Azores
 hw_dens <- terra::crop(rdens,hw)
 ggplot() +
   tidyterra::geom_spatraster(data = hw_dens, aes(fill = grip4_total_dens_m_km2))+
@@ -209,9 +208,8 @@ dens_df <- bind_rows(dens_isl) %>%
     med_dens = median(rdens),
     max_dens = max(rdens)
   )
-
-dens_df <- left_join(dens_df, isl_select %>% mutate(ID = as.character(ID)))
-
+hist(dens_df$mean_dens, n=10)
+hist(dens_df$med_dens, n=10)
 
 # Road density using open street map
 
@@ -238,3 +236,140 @@ for(i in 1:nrow(shp_55)){
     }
   print(i)
 }
+
+saveRDS(shp_55 %>% sf::st_drop_geometry() %>% select(ULM_ID, road_length), 
+        "data/derived-data/20_LU_road_length_OSM.rds")
+
+osm_length <- readRDS("data/derived-data/20_LU_road_length_OSM.rds")
+
+
+# check consistency with dens_df from GRIP
+
+osm_dens <- left_join(osm_length %>% rename(ID = ULM_ID), 
+                      isl_select %>% select(ID, Area, Archip)) %>%
+  mutate(rdens_osm = road_length/Area)
+
+
+osm_grip <- left_join((osm_dens %>% mutate(ID=as.character(ID))), dens_df)
+
+cor.test(osm_grip$mean_dens, osm_grip$rdens_osm)
+
+# using mean road density from GRIP
+ggplot(osm_grip %>% mutate(mean_dens = if_else(is.na(mean_dens), 0, mean_dens))) +
+  geom_point(aes(rdens_osm, mean_dens, color=Archip), size = 2)+
+  geom_abline(slope = 1, intercept = 0)+
+  ylab("Mean road density from GRIP") + xlab("Road density from OSM")+
+  theme_minimal()
+
+# using median road density from GRIP
+ggplot(osm_grip %>% mutate(med_dens = if_else(is.na(med_dens), 0, med_dens))) +
+  geom_point(aes(rdens_osm, med_dens, color=Archip))+
+  geom_abline(slope = 1, intercept = 0)
+
+
+
+##### Combine all LU metrics in one df #####
+
+# load data
+hm2017_isl <- readRDS("data/derived-data/20_LU_hm2017.rds")
+change90_15 <- readRDS("data/derived-data/20_LU_hm_1990_2015.rds")
+osm_length <- readRDS("data/derived-data/20_LU_road_length_OSM.rds")
+isl_select <- read.csv("data/derived-data/01_selected_islands.csv")
+
+
+# shape data to one value per island
+# take median, max, mean, and sd for aggregated metrics
+
+# HM 2017 static
+
+for(i in 1:length(hm2017_isl)){
+  hm2017_isl[[i]]= data.frame(
+    HM_static_2017 = hm2017_isl[[i]],
+    ID = names(hm2017_isl)[i])
+}
+hm2017_df <- bind_rows(hm2017_isl) %>%
+  group_by(ID) %>%
+  summarize(
+    mean_HM_static_2017 = mean(HM_static_2017/65536),
+    med_HM_static_2017 = median(HM_static_2017/65536),
+    sd_HM_static_2017 = sd(HM_static_2017/65536),
+    max_HM_static_2017 = max(HM_static_2017/65536)
+  )
+
+hist(hm2017_df$mean_HM_static_2017)
+hist(hm2017_df$med_HM_static_2017)
+hist(hm2017_df$max_HM_static_2017, n= 10)
+
+# HM Change 1990-2015
+for(i in 1:length(change90_15)){
+  change90_15[[i]]= data.frame(
+    HM_change = change90_15[[i]],
+    ID = names(change90_15)[i])
+}
+change_df <- bind_rows(change90_15) %>%
+  group_by(ID) %>%
+  summarize(
+    mean_HM_change = mean(HM_change/65536),
+    med_HM_change = median(HM_change/65536),
+    sd_HM_change = sd(HM_change/65536),
+    max_HM_change = max(HM_change/65536)
+  )
+
+hist(change_df$mean_HM_change)
+hist(change_df$med_HM_change)
+hist(change_df$max_HM_change, n= 10)
+
+
+# Road density
+
+osm_dens <- left_join(osm_length %>% rename(ID = ULM_ID), 
+                      isl_select %>% select(ID, Area)) %>%
+  mutate(rdens_osm = road_length/Area) %>%
+  mutate(ID = as.character(ID))
+
+
+# bind all databases
+
+LU_exposure <- left_join(left_join(hm2017_df, change_df), osm_dens )
+saveRDS(LU_exposure, "data/derived-data/20_LU_exposure_55_isl.rds")
+
+# check correlation between variables
+
+corr = cor(LU_exposure %>% select(-ID))
+p.mat <- ggcorrplot::cor_pmat(LU_exposure %>% select(-ID))
+
+ggcorrplot::ggcorrplot(corr, p.mat = p.mat, hc.order = TRUE,
+                       type = "lower", insig = "blank")
+
+
+corr = cor(LU_exposure %>% select(-ID))
+p.mat <- ggcorrplot::cor_pmat(LU_exposure %>% select(-ID))
+
+ggcorrplot::ggcorrplot(corr, p.mat = p.mat, hc.order = TRUE,
+                       type = "lower", insig = "blank",
+                       lab = TRUE)
+
+
+# sep by archipelago?
+LU_exposure <- left_join(isl_select %>% select(ID, Archip) %>% mutate(ID= as.character(ID)),
+                         LU_exposure)
+
+colnames(LU_exposure)
+
+ggplot(data = LU_exposure, aes(x=mean_HM_static_2017, y = mean_HM_change, color = Archip))+
+  geom_point()+
+  geom_pointrange(aes(ymin = mean_HM_change-sd_HM_change, 
+                      ymax = mean_HM_change+sd_HM_change), 
+                  size = .8, alpha = .6) +
+  geom_pointrange(aes(xmin = mean_HM_static_2017-sd_HM_static_2017, 
+                      xmax = mean_HM_static_2017+sd_HM_static_2017), 
+                  size = .8, alpha = .6) +
+  theme_classic()
+
+
+ggplot(data = LU_exposure)+
+  geom_boxplot(aes(x=Archip, y = rdens_osm, fill = Archip), alpha = .6) +
+  geom_jitter(aes(x=Archip, y = rdens_osm, color = Archip), alpha = .6, size = 3) +
+  theme_classic()
+
+

@@ -1,5 +1,5 @@
 # retrieve checklists for all the major islands, for birds and mammals
-
+library("tidyverse")
 # Azores: data from François Rigal
 azo_birds <- openxlsx::read.xlsx("data/raw-data/Azores_All_Mammals_Birds_names_ok.xlsx",
                                  sheet = 1)
@@ -49,3 +49,5 @@ azo_isl <- lapply(azo_isl, function(x){
 View(azo_isl$Flores)
 table(azo_isl$Flores$status)
 lapply(azo_isl, function(x){sum(is.na(x$status))})
+
+openxlsx::write.xlsx(azo_isl, "data/derived-data/10_AVIBASE_birds_Azores.xlsx")

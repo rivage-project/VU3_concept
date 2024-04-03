@@ -264,12 +264,17 @@ ggplot(cc_ar)+
   geom_point(aes(x=d_mean_tasmax, y = d_mean_tas, color = Archip), size = 2)
 
 
+# pr and sd pr
 ggplot(cc_ar)+
-  geom_boxplot(aes(x=Archip, y = d_mean_tas), color = "firebrick")+
-  geom_point(aes(x=Archip, y = d_mean_tas), color = "orange2", position = "jitter")
+  geom_point(aes(x=d_sd_pr, y = d_mean_pr, color = Archip), size = 2)+
+  geom_smooth(aes(x=d_sd_pr, y = d_mean_pr), method = "lm")
+
 ggplot(cc_ar)+
-  geom_boxplot(aes(x=Archip, y = d_sd_tas), color = "blue4")+
-  geom_point(aes(x=Archip, y = d_sd_tas), color = "cyan3", position = "jitter")
+  geom_boxplot(aes(x=Archip, y = d_mean_pr), color = "firebrick")+
+  geom_point(aes(x=Archip, y = d_mean_pr), color = "orange2", position = "jitter")
+ggplot(cc_ar)+
+  geom_boxplot(aes(x=Archip, y = d_sd_pr), color = "blue4")+
+  geom_point(aes(x=Archip, y = d_sd_pr), color = "cyan3", position = "jitter")
 # strong differences!
 
 # is it explained by latitude?

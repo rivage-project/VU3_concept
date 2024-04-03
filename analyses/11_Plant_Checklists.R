@@ -32,6 +32,8 @@ saveRDS(gift_isl, "data/raw-data/02_plant_gift_isl.csv")
 
 
 ## 1.2. Subset ----------------------------------------------------------------
+
+gift_isl <- readRDS("data/raw-data/02_plant_gift_isl.csv")
 isl_select <- fread("data/derived-data/01_selected_islands.csv")
 
 unique(isl_select$Archip) %in% gift_isl$geo_entity_ref
@@ -39,10 +41,11 @@ unique(isl_select$Archip) %in% gift_isl$geo_entity_ref
 # Hawaiian Islands and Hawaii sandy islands instead of Hawai
 # Mascarenes instead of Mascarene Islands
 
-isl_subset <- c("Hawaiian Islands", "Hawaii sandy islands",
+archip <- c("Hawaiian Islands", "Hawaii sandy islands",
                 "Galapagos Islands", "Canary Islands", "Azores", "Mascarenes")
 
-isl_subset <- gift_isl[which(gift_isl$geo_entity_ref %in% isl_subset), ]
+isl_subset <- gift_isl[which(gift_isl$geo_entity_ref %in% archip), ] %>%
+  distinct(.keep_all = TRUE)
 
 # what percentage of isl records our islands represent?
 nrow(isl_subset)/nrow(gift_isl)
@@ -50,6 +53,137 @@ table(isl_subset$geo_entity_ref)
 length(unique(isl_subset$geo_entity))
 n_occ_isl_arch <- isl_subset %>% group_by(geo_entity_ref, geo_entity) %>% count()
 table(n_occ_isl_arch$geo_entity_ref)
+#island names in GIFT
+unique(isl_subset$geo_entity)
+#island names in our db
+isl_select$Island_name
+
+db_gift <- isl_subset %>% distinct(geo_entity_ref, geo_entity, entity_ID) %>%
+  rename(Island_name = geo_entity,
+         Archip = geo_entity_ref) %>%
+  mutate(Archip = if_else(Archip %in% c("Hawaiian Islands", "Hawaii sandy islands"), "Hawaii", Archip),
+         Archip = if_else(Archip == "Mascarenes", "Mascarene Islands", Archip))
+
+db_isl <- isl_select %>% distinct(Archip, Island_name) 
+unique(db_isl$Archip)
+unique(db_gift$Archip)
+
+HelpersMG::d(db_isl[db_isl$Archip == "Galapagos Islands", ] %>% pull(Island_name))
+db_gift[db_gift$Archip == "Galapagos Islands", ] %>% pull(Island_name)
+
+
+# match by hand
+corresp = c(
+  "Ilha de Santa Maria" = "Santa Maria",
+  "Ilha de Sao Miguel" = "São Miguel",
+  "Ilha do Pico" = "Pico",
+  "Ilha do Faial" = "Faial", 
+  "Ilha de Sao Jorge" = "São Jorge", 
+  "Ilha Terceira" = "Terceira",
+  "Ilha Graciosa" ="Graciosa", 
+  "Ilha das Flores" = "Flores",
+  "Ilha do Corvo" = "Corvo",
+  "El Hierro" = "El Hierro",
+  "Isla de Gran Canaria" = "Gran Canaria",
+  "La Gomera" =  "La Gomera",
+  "Isla de Tenerife" = "Tenerife",
+  "Isla de Fuerteventura" = "Fuerteventura",
+  "Lobos" = NA,
+  "Isla de La Palma" = "La Palma",
+  "Isla de Lanzarote" = "Lanzarote",
+  "Isla Graciosa" = NA,
+  "Isla de Montana Clara" = NA,
+  "Isla de Alegranza" = NA,
+  "Island of Hawaii" = "Hawai'i Island",
+  "Kahoolawe" = "Kaho'olawe Island", 
+  "Lanai" = "Lana'i Island",
+  "Maui" = "Maui Island",
+  "Molokai" = "Moloka'i Island",
+  "Sand Island" = NA,
+  "Ford Island" = NA,
+  "Oahu" = "O'ahu Island (incl. Mokoli'i Islet)",
+  "Niihau" = "Ni'ihau Island",
+  "Lehua" = "Lehua Island",
+  "Kauai" = "Kaua'i Island",
+  "Laysan Island" = "Laysan Island",
+  "Lisianski Island" = "Lisianski Island",
+  "Isla Espanola" = "Española", 
+  "Isla Santa Maria" = "Floreana", 
+  "Isla Santa Fe" = "Santa Fé", 
+  "Isla San Cristobal" = "San Cristóbal", 
+  "Isla Pinzon" = "Pinzón", 
+  "Isla Santa Cruz" = "Santa Cruz, Galapagos", 
+  "Isla Baltra" = NA, 
+  "Isla Rabida" = NA, 
+  "Isla Seymour" = NA, 
+  "Isla Bartolome" = NA, 
+  "Isla Fernandina" = "Fernandina", 
+  "Isla San Salvador" = "Santiago, Galapagos", 
+  "Isla Isabela" = "Isabela", 
+  "Isla Genovesa" = "Genovesa", 
+  "Isla Marchena" = "Marchena", 
+  "Isla Pinta" = "Pinta", 
+  "Isla Wolf" = "Wolf", 
+  "Isla Darwin" = "Darwin",
+  "Ilet du Gros Galet" = "La Réunion", 
+  "Ile d' Ambre" = NA, 
+  "Mauritius" = "Mauritius", 
+  "Ile Rodrigues" = "Rodrigues"
+)
+
+corresp <- data.frame(isl_name_gift = corresp, Island_name = names(corresp))
+
+
+# make the match between corresp and our islands
+db_isl <- left_join(db_isl, corresp)
+
+# match with gift
+isl_subset <- inner_join(isl_subset %>% mutate(isl_name_gift = geo_entity), db_isl)
+
+# count all island with species
+n_occ_isl_arch <- isl_subset%>% distinct(work_species, Archip, Island_name) %>% 
+  group_by(Archip, Island_name) %>% count()
+n_occ_arch <- isl_subset %>% distinct(work_species, Archip) %>%
+  group_by(Archip) %>% count()
+
+# for the islands with checklists
+# native vs non-native species
+# https://biogeomacro.github.io/GIFT/articles/GIFT.html#distribution-of-species
+# make a status column with distinct categories
+colnames(isl_subset)
+status <- isl_subset %>%
+  mutate(Status = case_when(
+    native == 1 & naturalized == 0 ~ "native",
+    native == 1 & is.na(naturalized) ~ "native",
+    native == 0 & is.na(naturalized) ~ "non-native",
+    native == 0 & naturalized == 1 ~ "naturalized",
+    native == 0 & naturalized == 0 ~ "non-native",
+    is.na(native) & is.na(naturalized) ~ "unknown"
+  )) %>%  distinct(work_species, Archip, Island_name, Status) %>% 
+  group_by(Archip, Island_name, Status) %>% count()
+
+ggplot(status, aes(y = Island_name, x = n, fill = Status))+
+  geom_bar(stat = "identity")+
+  facet_wrap(vars(Archip), scales = "free")
+
+# proportion of native vs exotic species
+status_w <- status %>% pivot_wider(names_from = Status, values_from = n) %>%
+  mutate(naturalized = if_else(is.na(naturalized), 0, naturalized),
+         `non-native` = if_else(is.na(`non-native`), 0, `non-native`)) %>%
+  mutate(exotic = naturalized + `non-native`) %>%
+  mutate(prop_exo = exotic/native)
+
+ggplot(status_w, aes(x=native, y = exotic))+
+  geom_point(aes(color = Archip), size = 3)+
+  geom_smooth(method = lm)
+
+cor.test(status_w$exotic,status_w$native)
+
+ggplot(status_w, aes(x=Archip, y = prop_exo))+
+  geom_boxplot()+
+  geom_point(aes(color = Archip), alpha = .5, size = 3, position = "jitter")+
+  geom_hline(yintercept = 1, lty=2)
+
 
 # 2. Traits -------------------------------------------------------------------
 # Metadata for the trait table

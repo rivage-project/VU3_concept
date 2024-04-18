@@ -30,7 +30,7 @@ occ <- data1 %>%
   pivot_wider(
     names_from = "work_species", 
     values_from = "occ", 
-    #values_fill = 0
+    values_fill = 0
   ) %>%
   column_to_rownames("geo_entity")
 
@@ -102,7 +102,7 @@ status_l1 <- status_w %>%
     cols = native:unknown,
     names_to = "Status",
     values_to = "Number",
-    # values_drop_na = TRUE
+    values_drop_na = TRUE
   )
 
 colnames(status_w) <- c(
@@ -116,7 +116,7 @@ status_l2 <- status_w %>%
   pivot_longer(
     cols = starts_with("status"),
     names_to = "Status",
-    names_prefix = "status_", # try with "st"
+    names_prefix = "st", # try with "st"
     values_to = "Number",
     # values_drop_na = TRUE
   )

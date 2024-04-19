@@ -34,7 +34,7 @@ saveRDS(gift_isl, "data/raw-data/02_plant_gift_isl.csv")
 ## 1.2. Subset ----------------------------------------------------------------
 
 gift_isl <- readRDS("data/raw-data/02_plant_gift_isl.csv")
-isl_select <- fread("data/derived-data/01_selected_islands.csv")
+isl_select <- data.table::fread("data/derived-data/01_selected_islands.csv")
 
 unique(isl_select$Archip) %in% gift_isl$geo_entity_ref
 
@@ -183,6 +183,10 @@ ggplot(status_w, aes(x=Archip, y = prop_exo))+
   geom_boxplot()+
   geom_point(aes(color = Archip), alpha = .5, size = 3, position = "jitter")+
   geom_hline(yintercept = 1, lty=2)
+
+
+# save island names with GIFT data
+saveRDS(db_isl, "data/derived-data/11_isl_with_gift_data.rds")
 
 
 # 2. Traits -------------------------------------------------------------------

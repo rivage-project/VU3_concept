@@ -1,8 +1,17 @@
 # Get alien species checklists
 # for alien plants, mammals, and birds
 # make the distinction between alien only and invasive aliens
-
+rm(list = ls())
 library(tidyverse)
+
+###### Archipelago checklists from GRIIS #####
+
+# Get alien list for each archipelago
+
+# "Canary Islands" => list per island, useful for evaluating accuracy?
+# "Mascarene Islands", "Rodrigues" = > Mauritius + La Réunion
+# "Hawaii","Galapagos Islands", "Azores"
+
 ##### Canarias ------
 
 # checklist from GRIIS in GBIF
@@ -81,7 +90,45 @@ for(i in masc_isl){
 
 
 ###### Azores -------
+distrib <- readr::read_tsv(paste0("data/raw-data/alien_species/azores/",
+                                  "dwca-griis-portugal-azores-v1.8", "/distribution.txt"))
+profile <- readr::read_tsv(paste0("data/raw-data/alien_species/azores/",
+                                  "dwca-griis-portugal-azores-v1.8", "/speciesprofile.txt"))
+taxon <- readr::read_tsv(paste0("data/raw-data/alien_species/azores/",
+                                "dwca-griis-portugal-azores-v1.8", "/taxon.txt"))
+az <- left_join(distrib, left_join(profile, taxon))
+az_b <- az %>% filter(class=="Aves" & establishmentMeans =="Alien")
+# no alien birds according to griis
+az_m <- az %>% filter(class=="Mammalia" & establishmentMeans =="Alien")
+# 6 alien mammals according to griis
 
+
+# compare with François' database of birds and mammals
+azo_birds <- openxlsx::read.xlsx("data/raw-data/Azores_All_Mammals_Birds_names_ok.xlsx",
+                                 sheet = 1)
+# 7 alien birds according to François database
+azo_mam <- openxlsx::read.xlsx("data/raw-data/Azores_All_Mammals_Birds_names_ok.xlsx",
+                               sheet = 2)
+azo_mam %>% filter(Status=="ALIEN") %>% pull(Species)
+az_m %>% pull(scientificName)
+# only 3 species are in common...
+
+az_bm <- az %>% 
+  filter(class %in% c("Aves", "Mammalia") & establishmentMeans =="Alien") %>%
+  distinct(class, scientificName) %>% 
+  mutate(Archip = "Azores")
+# add mammals and birds from François database
+az_bm_fr <- bind_rows(
+  azo_birds %>% filter(Status=="ALIEN") %>%
+    select(species) %>% mutate(class="Aves"),
+  azo_mam %>% filter(Status=="ALIEN") %>%
+    select(Species) %>% mutate(class="Mammalia") %>% 
+    rename(species = Species)) %>%
+  mutate(Archip = "Azores",
+         species = gsub("_", " ", species)) %>%
+  rename(scientificName = species)
+
+az_bm <- bind_rows(az_bm, az_bm_fr)
 
 ###### Galapagos  -------
 
@@ -93,16 +140,13 @@ profile <- readr::read_tsv(paste0("data/raw-data/alien_species/galapagos/",
 taxon <- readr::read_tsv(paste0("data/raw-data/alien_species/galapagos/",
                                 "dwca-griis_galapagos_islands-v1.5", "/taxon.txt"))
 glp <- left_join(distrib, left_join(profile, taxon))
-glp_b <- glp %>% filter(class=="Aves" & establishmentMeans =="Alien")
 
+glp_bm <- glp %>% 
+  filter(class %in% c("Aves", "Mammalia") & establishmentMeans =="Alien") %>%
+  distinct(class, scientificName) %>% 
+  mutate(Archip = "Galapagos Islands")
 
-# and from matthews
-glp_matt <- read.csv2("data/raw-data/Baiser et al (2017) Galapagos Birds_current.csv")
-glp_matt_b <- gsub("_"," ", glp_matt$species)
-sum(glp_b %in% glp_matt_b)
-# only native birds in Galapagos in Matthews apparently
-
-
+unique(shp_44$ARCHIP)
 
 ###### Hawaii -------
 
@@ -156,3 +200,43 @@ for(i in not_common){
     print(i)
   }
 }
+
+##### Alien checklist per archipelago ########
+
+
+
+
+###### Methods with GBIF #######
+
+# define the list of species to look for:
+# all the species listed in the GRIIS checlists 
+# + species in other lists (Matthews, Rigal, etc)
+
+# only for alien birds and mammals
+# (if we accept the plant checklists from GIFT)
+
+
+
+# make a list of all alien birds and mammals
+# in all the archipelagoes
+
+
+# get the GBIF identifier
+# get the polygons of all islands
+# select only major islands with plant data
+
+# island polygons
+path_data <- "Z:/THESE/5_Data/Distribution_spatiale/"
+gadm_islands <- sf::st_read(paste0(
+  path_data, "Shpfiles_iles_continent/Islands_Weigelt_reparees.shp"))
+
+isl <- readRDS("data/derived-data/11_isl_with_gift_data.rds") %>% 
+  filter(!is.na(isl_name_gift))
+isl_select <- read.csv("data/derived-data/01_selected_islands.csv")
+
+shp_44 <- gadm_islands %>% 
+  filter(ULM_ID %in% (isl_select %>% 
+                        filter(Island_name %in% isl$Island_name) %>% 
+                        pull(ID)))
+
+

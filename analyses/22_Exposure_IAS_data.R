@@ -1,6 +1,21 @@
 # Get alien species checklists
 # for alien plants, mammals, and birds
-# make the distinction between alien only and invasive aliens
+# make the distinction between alien only and invasive aliens?
+
+# METHODS
+# define the list of species to look for:
+# all the species listed in the GRIIS checlists 
+# + species in other lists (Matthews, Rigal, etc)
+
+# only for alien birds and mammals
+# (if we accept the plant checklists from GIFT)
+
+# make a list of all alien birds and mammals
+# in all the archipelagoes
+
+# get the GBIF identifier
+# get the polygons of all islands (only major islands with plant data)
+
 rm(list = ls())
 library(tidyverse)
 
@@ -68,6 +83,17 @@ length(unique(pbm_alien_can%>%
                 filter(establishmentMeans =="Alien") %>% pull(scientificName)))
 # much less exotic species than in GIFT for plants
 
+# extract only bird and mammal names
+# for retrieving with GBIF occurrences
+# and compare with the provided checklists per island by GRIIS
+
+
+can_bm <- pbm_alien_can %>%
+  filter(establishmentMeans =="Alien" & class %in% c("Aves","Mammalia")) %>%
+  distinct(scientificName, class) %>%
+  mutate(Archip ="Canary Islands")
+
+
 ###### Mascarenes -------
 fold <- list.files("data/raw-data/alien_species/mascarene/")
 
@@ -88,7 +114,14 @@ for(i in masc_isl){
   alien_masc <- bind_rows(alien_masc, all)
 }
 
-
+masc_bm <- alien_masc %>%
+  # pbm in mascarene: columns establishmentmeans and occurrencestatus are inversed
+  # need to filter Alien status in both 
+  filter(establishmentMeans =="Alien" | occurrenceStatus=="Alien") %>%
+  filter(class %in% c("Aves","Mammalia")) %>%
+  distinct(scientificName, class) %>%
+  mutate(Archip ="Mascarene Islands")
+  
 ###### Azores -------
 distrib <- readr::read_tsv(paste0("data/raw-data/alien_species/azores/",
                                   "dwca-griis-portugal-azores-v1.8", "/distribution.txt"))
@@ -146,7 +179,7 @@ glp_bm <- glp %>%
   distinct(class, scientificName) %>% 
   mutate(Archip = "Galapagos Islands")
 
-unique(shp_44$ARCHIP)
+
 
 ###### Hawaii -------
 
@@ -201,31 +234,51 @@ for(i in not_common){
   }
 }
 
-##### Alien checklist per archipelago ########
+# extract only bird and mammal names
+# from GRIIS and Matthews to have the most complete list
+
+hw_bm <- bind_rows(
+  hw %>%
+    filter(class %in% c("Aves","Mammalia")) %>%
+    distinct(scientificName, class) %>%
+    mutate(Archip ="Hawaii"),
+  hw_matt_all %>%
+    mutate(scientificName = gsub("_", " ", species),
+           class = "Aves", 
+           Archip = "Hawaii") %>%
+    filter(scientificName %in% hw_alien_b[! hw_alien_b %in% griis_b])%>%
+    distinct(scientificName, class, Archip)
+)
 
 
 
+#### combine all checklists ----
 
-###### Methods with GBIF #######
+all_bm <- bind_rows(az_bm, can_bm, hw_bm, glp_bm, masc_bm) 
+length(unique(all_bm$scientificName))
+gbif_names <- rgbif::name_backbone_checklist(all_bm)
 
-# define the list of species to look for:
-# all the species listed in the GRIIS checlists 
-# + species in other lists (Matthews, Rigal, etc)
+sum(gbif_names$rank =="SPECIES")
+# some are subspecies
 
-# only for alien birds and mammals
-# (if we accept the plant checklists from GIFT)
+# collect all information at the species level
+# work with gbif taxo ID
 
+length(unique(gbif_names$speciesKey))
+length(sort(gbif_names$verbatim_name))
+length(unique(gbif_names$verbatim_index))
+cklist <- left_join(all_bm %>% 
+                      select(Archip) %>% 
+                      mutate(verbatim_index = 1:nrow(all_bm)), 
+                    gbif_names) %>%
+  distinct(Archip, usageKey, speciesKey, class)
 
+table(cklist %>% distinct(speciesKey, class) %>% pull(class))
+length(unique(cklist %>% filter(Archip!="Hawaii") %>% pull(usageKey)))
 
-# make a list of all alien birds and mammals
-# in all the archipelagoes
+saveRDS(cklist, "data/derived-data/alien_occ/22_list_alien_birds_mam_5_archip.rds")
 
-
-# get the GBIF identifier
-# get the polygons of all islands
-# select only major islands with plant data
-
-# island polygons
+# Get island polygons
 path_data <- "Z:/THESE/5_Data/Distribution_spatiale/"
 gadm_islands <- sf::st_read(paste0(
   path_data, "Shpfiles_iles_continent/Islands_Weigelt_reparees.shp"))
@@ -237,6 +290,153 @@ isl_select <- read.csv("data/derived-data/01_selected_islands.csv")
 shp_44 <- gadm_islands %>% 
   filter(ULM_ID %in% (isl_select %>% 
                         filter(Island_name %in% isl$Island_name) %>% 
-                        pull(ID)))
+                        pull(ID))) %>%
+  mutate(ARCHIP = if_else(ARCHIP=="Rodrigues","Mascarene Islands", ARCHIP))
+
+unique(shp_44$ARCHIP)
+
+wkt <- lapply(as.list(unique(shp_44$ARCHIP)), function(a){
+  archip = shp_44 %>% filter(ARCHIP==a)
+  ar_union <- sf::st_union(archip) %>%
+    sf::st_as_text()
+  return(ar_union)
+})
+names(wkt) <- unique(shp_44$ARCHIP)
+
+saveRDS(wkt, "data/derived-data/22_archip_wkt_for_GBIF.rds")
+
+# check if ok
+wkt_df <- data.frame(archip = names(wkt),
+                     geometry = unlist(wkt))
+sf_wkt <- sf::st_as_sf(wkt_df, wkt = "geometry")
+ggplot(sf_wkt[1,])+geom_sf(aes(fill=archip))
+
+
+###### Download occurrences #######
+
+# Using gbif.org credentials 
+user <- "claramarino" # your gbif.org username 
+pwd <- "data2021" # your gbif.org password
+email <- "claramarino665@gmail.com" # your email 
+
+# load checklist
+cklist <- readRDS("data/derived-data/alien_occ/22_list_alien_birds_mam_5_archip.rds")
+# load island polygons
+wkt <- readRDS("data/derived-data/22_archip_wkt_for_GBIF.rds")
+
+
+# occ_archip <- lapply(as.list(names(wkt)), function(a){
+#   occ_i <- rgbif::occ_download(
+#     rgbif::pred_in("taxonKey", cklist %>% filter(Archip==a) %>% pull(usageKey)),
+#     rgbif::pred("hasCoordinate", TRUE),
+#     rgbif::pred("hasGeospatialIssue", FALSE),
+#     rgbif::pred("geometry", wkt[[a]]),
+#     format = "SIMPLE_CSV",
+#     user=user,pwd=pwd,email=email
+#   )
+#   
+#   meta <- rgbif::occ_download_meta(occ_i)
+#   return(meta)
+# })
+# Erreur : A download limitation is exceeded:
+# User claramarino has too many simultaneous downloads; the limit is 3.
+# Please wait for some to complete, or cancel any unwanted downloads. 
+
+# do it for archipelagos 1-2-3 and then 4-5
+occ_archip123 <- lapply(as.list(names(wkt)[1:3]), function(a){
+    occ_i <- rgbif::occ_download(
+      rgbif::pred_in("taxonKey", cklist %>% filter(Archip==a) %>% pull(usageKey)),
+      rgbif::pred("hasCoordinate", TRUE),
+      rgbif::pred("hasGeospatialIssue", FALSE),
+      rgbif::pred("geometry", wkt[[a]]),
+      format = "SIMPLE_CSV",
+      user=user,pwd=pwd,email=email
+    )
+
+    meta <- rgbif::occ_download_meta(occ_i)
+    return(meta)
+  })
+# wait for the downloads to proceed to start the next request
+occ_archip45 <- lapply(as.list(names(wkt)[4:5]), function(a){
+  occ_i <- rgbif::occ_download(
+    rgbif::pred_in("taxonKey", cklist %>% filter(Archip==a) %>% pull(usageKey)),
+    rgbif::pred("hasCoordinate", TRUE),
+    rgbif::pred("hasGeospatialIssue", FALSE),
+    rgbif::pred("geometry", wkt[[a]]),
+    format = "SIMPLE_CSV",
+    user=user,pwd=pwd,email=email
+  )
+  meta <- rgbif::occ_download_meta(occ_i)
+  return(meta)
+})
+# combine the metadata
+occ_archip = c(occ_archip123, occ_archip45)
+names(occ_archip) <- names(wkt) 
+
+saveRDS(occ_archip, "data/raw-data/alien_species/gbif_occ/22_metadata_GBIF_5_archip.rds")
+
+
+# once all downloads are ready, get the .csv files 
+for (i in 1:length(occ_archip)){
+  rgbif::occ_download_get(
+    occ_archip[[i]]$key, 
+    path = "data/raw-data/alien_species/gbif_occ"
+  )
+  print(i)
+}
+
+names(occ_archip)
+
+###### Clean GBIF records #####
+
+# functions from CoordinateCleaner package + RISK project
+source("R/clean_coordinates_gbif.R")
+
+# open occ files from all archipelagos, combine in a single df
+occ_all <- data.frame()
+files_all <- list.files("data/raw-data/alien_species/gbif_occ/")
+files = files_all[grepl(".zip", files_all)]
+for (i in files){
+  occ <- readr::read_tsv(unzip(paste0(
+  "data/raw-data/alien_species/gbif_occ/",i))) %>%
+    mutate(recordNumber = as.character(recordNumber))
+  occ_all <- bind_rows(occ_all, occ)
+}
+str(occ_all)
+
+# get clean coordinates
+occ_clean <- clean_coord_base(occ_all)
+
+# remove points with flagged errors
+occ_clean_no_flag <- flag_rm_terr(occ_clean)
+
+# species difference?
+sp_diff(occ_all, occ_clean_no_flag)
+# 1 species has no more alien occurrence on any of the archip
+
+# how many species in total?
+length(unique(occ_clean_no_flag$speciesKey))
+length(unique(occ_clean_no_flag$taxonKey))
+
+
+saveRDS(occ_clean_no_flag, 
+        "data/derived-data/alien_occ/22_GBIF_clean_alien_occ_124sp.rds")
+
+
+##### Compute alien checklists for each island ######
+occ <- readRDS("data/derived-data/alien_occ/22_GBIF_clean_alien_occ_124sp.rds")
+# transform occ to sf object
+coord <- occ %>%
+  mutate_at(vars(LONG, LAT), as.numeric) %>%   # coordinates must be numeric
+  st_as_sf(
+    coords = c("LONG", "LAT"),
+    agr = "constant",
+    crs = "+proj=longlat +datum=WGS84",
+    stringsAsFactors = FALSE,
+    remove = TRUE)
+
+# get the intersection of all occ and isl shapefiles
+
+
 
 

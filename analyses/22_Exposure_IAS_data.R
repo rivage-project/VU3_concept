@@ -28,6 +28,7 @@ gadm_islands <- sf::st_read(paste0(
 isl <- readRDS("data/derived-data/11_isl_with_gift_data.rds") %>% 
   filter(!is.na(isl_name_gift))
 isl_select <- read.csv("data/derived-data/01_selected_islands.csv")
+isl2 <- left_join(isl_select, isl) %>% rename(ULM_ID = ID)
 
 shp_44 <- gadm_islands %>% 
   filter(ULM_ID %in% (isl_select %>% 
@@ -470,8 +471,11 @@ ias_archip <- left_join(
   mutate(ISLAND = if_else(ISLAND == "El Hierro","Isla de El Hierro", ISLAND)) %>%
   mutate(ISLAND = if_else(ISLAND == "La Gomera","Isla de La Gomera", ISLAND))
 
-# compare with checklist of aliens in each island of Canarias
+# get the class of each species (birds and mammals)
+cklist <- readRDS("data/derived-data/alien_occ/22_list_alien_birds_mam_5_archip.rds")
+ias_archip_group <- left_join(ias_archip, cklist %>% distinct(speciesKey, class))
 
+# compare with checklist of aliens in each island of Canarias
 can_bm <- pbm_alien_can %>%
   filter(establishmentMeans =="Alien" & class %in% c("Aves","Mammalia")) %>%
   mutate(ISLAND =  gsub("Canarias-", "Isla de", locationID))
@@ -545,17 +549,69 @@ for (i in 1:length(out)){
   }
 }
 
+
+
+
+
 #############
 
 # Create a database with IAS info for each island
-# - nb of alien plants
+# - nb of alien plants + prop alien plants
 # - nb of alien  birds + mammals
 # - % of 1km² cells with at least one alien bird/mammal occurrence
 
 # alien plants
-plants <- readRDS("data/derived-data/11_nb_native_alien_plants.rds")
+plants <- readRDS("data/derived-data/11_nb_native_alien_plants.rds") %>%
+  rename(nb_alien_plant = exotic,
+         prop_alien_plant = prop_exo) %>%
+  select(Island_name, nb_alien_plant, prop_alien_plant)
+plants_ok <- left_join(plants, isl2 %>% select(ULM_ID, Island_name))
+# alien birds and mammals
+bm <- ias_archip_group %>%
+  group_by(ULM_ID, ARCHIP, ISLAND, class) %>%
+  summarize(nb_alien = n())%>%
+  pivot_wider(names_from = class,
+              values_from = nb_alien,
+              values_fill = 0) %>%
+  mutate(nb_alien_vert = Mammalia+Aves) %>%
+  rename(nb_alien_mam = Mammalia,
+         nb_alien_bird = Aves)
+# get alien range cover
+bm_cover <- left_join(bm, df_alien_range) %>%
+  mutate(alien_vert_cover = occ_cells/island_cells)
+
+# bind plants and vertebrates
+expo_ias <- left_join(bm_cover, plants_ok)
+
+# save final dataset
+saveRDS(expo_ias %>% ungroup() %>% select(-c(ARCHIP, ISLAND, Archip, Island_name)),
+        "data/derived-data/22_IAS_exposure_39_isl.rds")
 
 
 
+#############
 
+# plot simple relationships
+
+# alien plants vs alien vertebrates
+ggplot(expo_ias) +
+  geom_point(aes(x=nb_alien_vert, y= nb_alien_plant, color = ARCHIP), 
+             alpha = .5, size = 3)
+
+# alien birds vs alien mammals
+ggplot(expo_ias) +
+  geom_point(aes(x=nb_alien_bird, y= nb_alien_mam, color = ARCHIP), 
+             alpha = .5, size = 3)
+
+# richness of alien vertebrates vs alien vertebrate cover
+ggplot(expo_ias) +
+  geom_point(aes(x=nb_alien_vert, y= alien_vert_cover, color = ARCHIP), 
+             alpha = .5, size = 3)
+
+
+
+ggplot(expo_ias) +
+  geom_boxplot(aes(y = nb_alien_vert, x = ARCHIP))+
+  geom_point(aes(y = nb_alien_vert, x = ARCHIP, color = ARCHIP), 
+             alpha = .5, size = 3)
 

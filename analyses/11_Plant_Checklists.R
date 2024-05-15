@@ -187,7 +187,8 @@ ggplot(status_w, aes(x=Archip, y = prop_exo))+
 
 # save island names with GIFT data
 saveRDS(db_isl, "data/derived-data/11_isl_with_gift_data.rds")
-
+# save nb of alien plants for exposure to IAS
+saveRDS(status_w, "data/derived-data/11_nb_native_alien_plants.rds")
 
 # 2. Traits -------------------------------------------------------------------
 # Metadata for the trait table

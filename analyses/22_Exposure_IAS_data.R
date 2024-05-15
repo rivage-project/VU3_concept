@@ -19,6 +19,25 @@
 rm(list = ls())
 library(tidyverse)
 
+
+# Get island polygons
+path_data <- "Z:/THESE/5_Data/Distribution_spatiale/"
+gadm_islands <- sf::st_read(paste0(
+  path_data, "Shpfiles_iles_continent/Islands_Weigelt_reparees.shp"))
+
+isl <- readRDS("data/derived-data/11_isl_with_gift_data.rds") %>% 
+  filter(!is.na(isl_name_gift))
+isl_select <- read.csv("data/derived-data/01_selected_islands.csv")
+
+shp_44 <- gadm_islands %>% 
+  filter(ULM_ID %in% (isl_select %>% 
+                        filter(Island_name %in% isl$Island_name) %>% 
+                        pull(ID))) %>%
+  mutate(ARCHIP = if_else(ARCHIP=="Rodrigues","Mascarene Islands", ARCHIP))
+
+unique(shp_44$ARCHIP)
+
+
 ###### Archipelago checklists from GRIIS #####
 
 # Get alien list for each archipelago
@@ -278,23 +297,8 @@ length(unique(cklist %>% filter(Archip!="Hawaii") %>% pull(usageKey)))
 
 saveRDS(cklist, "data/derived-data/alien_occ/22_list_alien_birds_mam_5_archip.rds")
 
-# Get island polygons
-path_data <- "Z:/THESE/5_Data/Distribution_spatiale/"
-gadm_islands <- sf::st_read(paste0(
-  path_data, "Shpfiles_iles_continent/Islands_Weigelt_reparees.shp"))
 
-isl <- readRDS("data/derived-data/11_isl_with_gift_data.rds") %>% 
-  filter(!is.na(isl_name_gift))
-isl_select <- read.csv("data/derived-data/01_selected_islands.csv")
-
-shp_44 <- gadm_islands %>% 
-  filter(ULM_ID %in% (isl_select %>% 
-                        filter(Island_name %in% isl$Island_name) %>% 
-                        pull(ID))) %>%
-  mutate(ARCHIP = if_else(ARCHIP=="Rodrigues","Mascarene Islands", ARCHIP))
-
-unique(shp_44$ARCHIP)
-
+# Transform island polygons as WKT for passing to rgbif
 wkt <- lapply(as.list(unique(shp_44$ARCHIP)), function(a){
   archip = shp_44 %>% filter(ARCHIP==a)
   ar_union <- sf::st_union(archip) %>%
@@ -426,16 +430,131 @@ saveRDS(occ_clean_no_flag,
 ##### Compute alien checklists for each island ######
 occ <- readRDS("data/derived-data/alien_occ/22_GBIF_clean_alien_occ_124sp.rds")
 # transform occ to sf object
+
 coord <- occ %>%
   mutate_at(vars(LONG, LAT), as.numeric) %>%   # coordinates must be numeric
-  st_as_sf(
+  sf::st_as_sf(
     coords = c("LONG", "LAT"),
     agr = "constant",
     crs = "+proj=longlat +datum=WGS84",
     stringsAsFactors = FALSE,
     remove = TRUE)
 
+#ggplot(coord)+geom_sf()
+
 # get the intersection of all occ and isl shapefiles
+sum(sf::st_is_valid(shp_44))
+sum(sf::st_is_valid(coord))
+
+sf::st_crs(shp_44) == sf::st_crs(coord)
+
+inter <- sf::st_intersects(shp_44, coord)
+
+# dataframe for each island
+out = inter
+out_df = data.frame()
+for(i in 1:length(inter)){
+  print(i)
+  if(!is_empty(inter[[i]])){
+    out[[i]] = coord[inter[[i]],] %>% distinct(taxonKey, speciesKey, species, geometry)
+    out[[i]]$ULM_ID = shp_44$ULM_ID[i]
+    out_df <- bind_rows(out_df, out[[i]] %>% distinct(taxonKey, speciesKey, species))
+  }
+}
+
+# get the checklist of IAS per island, aggregated in one df
+ias_archip <- left_join(
+  out_df, 
+  shp_44 %>% sf::st_drop_geometry() %>% select(ULM_ID, ARCHIP, ISLAND)) %>%
+  distinct(speciesKey, species, ULM_ID, ARCHIP, ISLAND) %>%
+  mutate(ISLAND = if_else(ISLAND == "El Hierro","Isla de El Hierro", ISLAND)) %>%
+  mutate(ISLAND = if_else(ISLAND == "La Gomera","Isla de La Gomera", ISLAND))
+
+# compare with checklist of aliens in each island of Canarias
+
+can_bm <- pbm_alien_can %>%
+  filter(establishmentMeans =="Alien" & class %in% c("Aves","Mammalia")) %>%
+  mutate(ISLAND =  gsub("Canarias-", "Isla de", locationID))
+
+df_all <- data.frame()
+for (i in unique(can_bm$ISLAND)){
+  #i = "Isla de Tenerife"
+  sp_griis <- can_bm %>% 
+    filter(ISLAND == i) %>% pull(scientificName)
+  sp_gbif <- ias_archip %>% 
+    filter(ISLAND == i) %>% pull(species)
+  sp_in_common <- 0
+  missing_sp=c()
+  for (k in sp_gbif){
+    #k=sp_gbif[1]
+    sp_in_common <- sp_in_common + sum(grepl(k, sp_griis))
+    if(sum(grepl(k, sp_griis))==0){
+      missing_sp <- c(missing_sp, k)
+    }
+  }
+  print(i)
+  print(paste0(length(sp_griis), " species in GRIIS"))
+  print(paste0(length(sp_gbif), " species in GBIF"))
+  print(paste0(sp_in_common, " species in GRIIS and GBIF"))
+  print(" Species that are in GBIF but not in GRIIS:")
+  print(missing_sp)
+  
+  df <- data.frame(
+    ISLAND = i,
+    sp_griis = length(sp_griis),
+    sp_gbif = length(sp_gbif),
+    sp_in_common = sp_in_common,
+    GBIF_but_not_GRIIS = paste(missing_sp, collapse = ", ")
+  )
+  
+  df_all <- bind_rows(df_all, df)
+  
+}
+
+# check the consistency with Azores from François
+
+ias_archip %>% filter(ARCHIP=="Azores")
+# more species are identified with the GRIIS / GBIF combo
+# than in the checklist from François
+
+
+# for each island with occ
+# count the number of 1km²-cells that have at least one alien occurrence
+
+df_alien_range <- data.frame()
+for (i in 1:length(out)){
+  if(length(out[[i]])>0){
+    # transform points and polygons to Mollweide projection
+    # for having an equal-area cell grid
+    
+    occ <- sf::st_transform(out[[i]], crs = "+proj=moll")
+    isl <- sf::st_transform(shp_44 %>% filter(ULM_ID==unique(occ$ULM_ID)), crs = "+proj=moll")
+    
+    grid <- sf::st_make_grid(isl, c(1000, 1000), what = "polygons", square = T)
+    grid_sf = sf::st_sf(grid) %>%
+      mutate(grid_id = 1:length(lengths(grid)))
+    
+    df <- data.frame(
+      ULM_ID = isl$ULM_ID,
+      island_cells = length(sf::st_intersects(isl, grid_sf)[[1]]),
+      occ_cells = length(unique(unlist(sf::st_intersects(occ, grid_sf))))
+    )
+    
+    df_alien_range <- bind_rows(df_alien_range, df)
+    print(i)
+  }
+}
+
+#############
+
+# Create a database with IAS info for each island
+# - nb of alien plants
+# - nb of alien  birds + mammals
+# - % of 1km² cells with at least one alien bird/mammal occurrence
+
+# alien plants
+plants <- readRDS("data/derived-data/11_nb_native_alien_plants.rds")
+
 
 
 

@@ -207,6 +207,7 @@ delta_pr <- pr_agg %>%
 hist(delta_pr$d_sd_pr)  
 hist(delta_pr$d_mean_pr)  
 
+#### Climate velocity metric
 
 
 ####### Aggregate all var together #######

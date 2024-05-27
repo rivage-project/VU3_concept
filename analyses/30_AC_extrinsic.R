@@ -72,16 +72,35 @@ saveRDS(dat_isl, "data/derived-data/30_extrinsic_AC_elevation.rds")
 # Load PAs from WDPA database
 # Following Leclerc et al. 2020, select only non-marine PA
 # only PA that have strict protection measures (IUCN I to IV)
+# and only terrestrial PAs
 
 path_pa <- "data/raw-data/WDPA/"
+all_isl_pa <- list()
+for(i in 0:2){
+  shpi <- sf::st_read(paste0(path_pa, "WDPA_May2024_Public_shp_", 
+                             i, "/WDPA_May2024_Public_shp-polygons.shp"))
+  shp <- shpi %>% 
+    filter(IUCN_CAT %in% c("Ia","Ib","II","III","IV")) %>%
+    filter(MARINE!="2")
+  
+  shpv <- sf::st_make_valid(shp)
+  # sum(sf::st_is_valid(shpv))
+  # select only valid geometries (check the invalid ones after if they cross islands)
+  validshp <- shpv[sf::st_is_valid(shpv),]
+  
+  # call intersect function before (faster than intersection)
+  inter <- sf::st_intersects(shp_44, validshp)
+  # extract all lines from PA shp which intersects with selected isl
+  test <- unique(unlist(inter))
+  # call intersection to have the 
+  isl_pa <- sf::st_intersection(shp_44, validshp[test,])
+  
+  all_isl_pa[[i+1]] <- isl_pa
+  print(i)
+}
 
-shp0 <- sf::st_read(paste0(path_pa,
-                       "WDPA_May2024_Public_shp_0/WDPA_May2024_Public_shp-polygons.shp"))
-shp1 <- sf::st_read(paste0(path_pa,
-                       "WDPA_May2024_Public_shp_1/WDPA_May2024_Public_shp-polygons.shp"))
-shp2 <- sf::st_read(paste0(path_pa,
-                       "WDPA_May2024_Public_shp_2/WDPA_May2024_Public_shp-polygons.shp"))
 
+# see if any point data intersect with our isl?
 pts0 <- sf::st_read(
   paste0(path_pa, "WDPA_May2024_Public_shp_0/WDPA_May2024_Public_shp-points.shp"))
 pts1 <- sf::st_read(
@@ -89,29 +108,29 @@ pts1 <- sf::st_read(
 pts2 <- sf::st_read(
   paste0(path_pa, "WDPA_May2024_Public_shp_2/WDPA_May2024_Public_shp-points.shp"))
 
-shp <- bind_rows(
-  shp0 %>% filter(IUCN_CAT %in% c("Ia","Ib","II","III","IV")), 
-  shp1 %>% filter(IUCN_CAT %in% c("Ia","Ib","II","III","IV")), 
-  shp2 %>% filter(IUCN_CAT %in% c("Ia","Ib","II","III","IV")))
+pts <- bind_rows(pts0, pts1, pts2) %>% 
+  filter(IUCN_CAT %in% c("Ia","Ib","II","III","IV")) %>% 
+  filter(MARINE!="2")
 
-rm(shp1, shp2, shp0)
-
-pts <- bind_rows(
-  pts0 %>% filter(IUCN_CAT %in% c("Ia","Ib","II","III","IV")), 
-  pts1 %>% filter(IUCN_CAT %in% c("Ia","Ib","II","III","IV")), 
-  pts2 %>% filter(IUCN_CAT %in% c("Ia","Ib","II","III","IV")))
-rm(pts1, pts2, pts0)
+inter_pts <- sf::st_intersects(shp_44, validshp[pts,])
+length(unlist(inter_pts))
+# 0 island has any point from WDPA data 
 
 
-# remove marine PA
-shpt <- shp %>% filter(MARINE!="2")
-ptst <- pts %>% filter(MARINE!="2")
 
-sf::st_crs(shpt)==sf::st_crs(shp_44)
-sum(sf::st_is_valid(shpt))
+# bind all shapefiles together 
+isl_pa_df <- bind_rows(all_isl_pa)
+d = data.frame()
+for(i in unique(isl_pa_df$ULM_ID)){
+  a = isl_pa_df %>% filter(ULM_ID == i) %>% sf::st_make_valid()
+  b = sf::st_union(a) %>% sf::st_area()
+  c = data.frame(pa_area = b, 
+                 ULM_ID = i)
+  d <- bind_rows(d, c)
+}
 
-shpt <- sf::st_make_valid(shpt)
+prop_pa <- left_join(d, shp_44 %>% select(ULM_ID, ISLAND, ARCHIP) %>% mutate(area = sf::st_area(geometry))) %>%
+  mutate(PA_prop = round(pa_area/area, 4))
 
-isl_pa <- sf::st_intersection(shp_44, shpt)
-
+saveRDS(prop_pa, "data/derived-data/30_extrinsic_AC_prop_PA.rds")
 

@@ -66,6 +66,26 @@ dat_isl$ULM_ID <- shp_44$ULM_ID[dat_isl$ID]
 
 saveRDS(dat_isl, "data/derived-data/30_extrinsic_AC_elevation.rds")
 
+#### Exploration topography
+dat_isl <- readRDS("data/derived-data/30_extrinsic_AC_elevation.rds")
+tp <- left_join(shp_44, dat_isl)
+ggplot(tp)+
+  geom_point(aes(x=mean_tpi, y=mean_tri, color = ARCHIP),
+             size = 3, alpha =.5)
+ggplot(tp)+
+  geom_point(aes(x=sd_tpi, y=sd_tri, color = ARCHIP),
+             size = 3, alpha =.5)
+  
+ggplot(tp)+
+  geom_point(aes(x=mean_elev, y=max_elev, color = ARCHIP),
+             size = 3, alpha =.5)
+
+ggplot(tp)+
+  geom_point(aes(x=mean_elev, y=mean_tpi, color = ARCHIP))
+ggplot(tp)+
+  geom_point(aes(x=mean_elev, y=mean_tri, color = ARCHIP),
+             size = 3, alpha =.5)
+
 
 ###### 2. Island conservation potential #####
 
@@ -134,3 +154,11 @@ prop_pa <- left_join(d, shp_44 %>% select(ULM_ID, ISLAND, ARCHIP) %>% mutate(are
 
 saveRDS(prop_pa, "data/derived-data/30_extrinsic_AC_prop_PA.rds")
 
+#### Exploration pa coverage
+prop_pa <- readRDS("data/derived-data/30_extrinsic_AC_prop_PA.rds")
+pa <- left_join(shp_44, prop_pa)
+library(units)
+ggplot(pa)+
+  geom_boxplot(aes(x=ARCHIP, y = PA_prop), outlier.shape = NA)+
+  geom_point(aes(x=ARCHIP, y = PA_prop, color = ARCHIP), 
+             position ="jitter", size = 3, alpha =.5)

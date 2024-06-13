@@ -57,4 +57,17 @@ openxlsx::write.xlsx(azo_isl, "data/derived-data/10_AVIBASE_birds_Azores.xlsx")
 # birds from Galapagos 
 
 
+# birds from Hawaii
+hw_matt_all <- read.csv("data/raw-data/Matthews_et_al_2023/txm676-DARs-8b381ff/Data/Island_datasets/True_island_datasets/Alternative_versions/Alien_versions/Baiser et al (2017) Hawaii Birds_current_withAlien.csv")
+hw_matt_nat <- read.csv2("data/raw-data/Baiser et al (2017) Hawaii Birds_current_noAliens.csv")
+
+hw_alien_b <- gsub("_"," ", setdiff(hw_matt_all$species, hw_matt_nat$species))
+
+sum(griis_b %in% hw_alien_b) # 11 species not in common from each list
+
+griis_b[! griis_b %in% hw_alien_b]
+hw_alien_b[! hw_alien_b %in% griis_b]
+
+
+
 

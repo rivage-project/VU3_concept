@@ -8,14 +8,27 @@ unique(isl_select$Island_name)
 
 #### BIRDS ####
 
+# shape all databases in long format
+# with a column for Island_name and a column for species
+
+
 # Azores
-azo_birds <- openxlsx::read.xlsx("data/raw-data/Azores_All_Mammals_Birds_names_ok.xlsx", sheet = 1)
-colnames(azo_birds)
+azo_b <- openxlsx::read.xlsx("data/raw-data/Azores_All_Mammals_Birds_names_ok.xlsx", sheet = 1)
+colnames(azo_b)
 #change colnames for matching the island names in isl_select
-colnames(azo_birds) <- c("species","Status","Comments",
+colnames(azo_b) <- c("species","Status","Comments",
                          "Ilha do Corvo","Ilha das Flores","Ilha do Faial",
                          "Ilha do Pico","Ilha Graciosa","Ilha de Sao Jorge", 
                          "Ilha Terceira","Ilha de Sao Miguel","Ilha de Santa Maria")
+azo_bl <- azo_b %>%
+  filter(Status=="NATIVE") %>%
+  select(-c(Comments, Status)) %>%
+  pivot_longer(!species, names_to = "Island_name", values_to = "Occ") %>%
+  filter(Occ==1) %>%
+  mutate(species = gsub("_"," ", species)) %>%
+  select(-Occ)
+length(unique(azo_bl$species)) # 27 native bird species in Azores
+
 # Galapagos 
 glp_b <- read.csv("data/raw-data/Matthews_et_al_2023/txm676-DARs-8b381ff/Data/Island_datasets/True_island_datasets/Baiser et al (2017) Galapagos Birds_current.csv")
 # change colnames for matching the island names in isl_select
@@ -25,20 +38,79 @@ colnames(glp_b) <- c("species","Isla Espanola","Isla Santa Maria","Isla San Cris
                      "Isla Santa Fe","Isla Santa Cruz","Isla Baltra",
                      "Isla Pinzon","Isla Isabela","Isla Fernandina",
                      "Isla San Salvador", "Isla Genovesa")
-glp_b <- glp_b[1:54,] %>%
+glp_bl <- glp_b[1:54,] %>%
   mutate(species = gsub("_"," ", species)) %>%
-  mutate(`Isla Seymour` = `Isla Baltra`)
+  mutate(`Isla Seymour` = `Isla Baltra`) %>%
+  pivot_longer(!species, names_to = "Island_name", values_to = "Occ") %>%
+  filter(Occ==1) %>%
+  select(-Occ)
+length(unique(glp_bl$species))# 54 native birds
                          
 # Hawaii
 hw_b <- read.csv("data/raw-data/Matthews_et_al_2023/txm676-DARs-8b381ff/Data/Island_datasets/True_island_datasets/Baiser et al (2017) Hawaii Birds_current_noAliens.csv")
-hw_b <- hw_b[1:38,] %>%
+hw_bl <- hw_b[1:38,] %>%
   mutate(species = gsub("_"," ", species)) %>%
-  rename(`Island of Hawaii`= Hawaii)
+  rename(`Island of Hawaii`= Hawaii) %>%
+  pivot_longer(!species, names_to = "Island_name", values_to = "Occ") %>%
+  filter(Occ==1) %>%
+  select(-Occ)
+length(unique(hw_bl$species))# 38 native birds
 
 # canarias
 cn_b <- read.csv("data/raw-data/Matthews_et_al_2023/txm676-DARs-8b381ff/Data/Island_datasets/True_island_datasets/Borgesetal_canary birds_noAliens.csv")
-cn_b2 <- openxlsx::read.xlsx("data/raw-data/Canarias_Mammals_Birds.xlsx", sheet = "birds")
+colnames(cn_b) <- c("species","Isla de Lanzarote","Isla de Fuerteventura",
+                    "Isla de Gran Canaria","Isla de Tenerife","La Gomera",
+                    "Isla de La Palma","El Hierro")
+cn_b <- cn_b[1:74,] %>%
+  mutate(species = gsub("_"," ", species))
 
+cn_b2 <- openxlsx::read.xlsx("data/raw-data/Canarias_Mammals_Birds.xlsx", sheet = "birds")
+colnames(cn_b2) <- c("species","Status",
+                     "El Hierro","Isla de La Palma","La Gomera","Isla de Tenerife",
+                     "Isla de Gran Canaria","Isla de Fuerteventura","Isla de Lanzarote")
+cn_b_tot <- bind_rows(cn_b, cn_b2 %>% select(-Status)) %>% distinct()
+setdiff(cn_b2$species, cn_b$species)
+setdiff(cn_b$species, cn_b2$species)
+# correct species name when necessary
+# serinus canarius = serinus canaria
+# Miliaria calandra = Emberiza calandra
+# Stigmatopelia senegalensis = Streptopelia senegalensis
+# Phaethon aethereus => only vagrant, remove from data
+# Nycticorax nycticorax = passage only, remove
+# Pelagodroma marina, Milvus migrans, Larus fuscus => ok to keep
+
+cn_b_temp <- cn_b_tot %>%
+  mutate(species = if_else(species=="Serinus canarius", "Serinus canaria", species),
+         species = if_else(species=="Miliaria calandra", "Emberiza calandra", species),
+         species = if_else(species=="Stigmatopelia senegalensis", "Streptopelia senegalensis", species)) %>%
+  filter(!species %in% c("Phaethon aethereus", "Nycticorax nycticorax")) %>%
+  distinct()
+
+length(unique(cn_b_temp$species))
+
+dup <- cn_b_temp$species[duplicated(cn_b_temp$species)]
+
+cn_dup <- cn_b_temp %>% filter(species %in% dup)
+
+# take a conservative matrix: only present where both databases agree
+# (following IUCN for some example species)
+cn_pres <- cn_dup %>%
+  group_by(species) %>% 
+  summarise(across(everything(), sum))
+cn_pres[cn_pres<2] = 0 # if not in both databases, put absence
+cn_pres[cn_pres==2] = 1 # all presences to 1
+
+# bind with non duplicated species to get the final db
+cn_b_ok <- bind_rows(cn_b_temp %>% filter(!species %in% dup), cn_pres)
+
+cn_bl <- cn_b_ok %>%
+  pivot_longer(!species, names_to = "Island_name", values_to = "Occ") %>%
+  filter(Occ==1) %>%
+  select(-Occ)
+length(unique(cn_bl$species)) # 77 native birds
+
+
+# Mascarenes
 # reunion
 lr_b <- openxlsx::read.xlsx("data/raw-data/AVIBASE/AVIBASE_Reunion_accessed240709.xlsx")
 # mauritius
@@ -46,38 +118,27 @@ m_b <- openxlsx::read.xlsx("data/raw-data/AVIBASE/AVIBASE_Mauritius_main_isl_acc
 # rodrigues
 rg_b <- openxlsx::read.xlsx("data/raw-data/AVIBASE/AVIBASE_Mauritius_Rodrigues_accessed240709.xlsx")
 
-masc <- bind_rows(lr_b, m_b, rg_b)
+masc_bl <- bind_rows(
+  lr_b %>% mutate(Island_name = "Ilet du Gros Galet"), 
+  m_b %>% mutate(Island_name = "Mauritius"), 
+  rg_b %>% mutate(Island_name = "Ile Rodrigues")) %>%
+  filter(!is.na(binomial)) %>%
+  filter(!status %in% c("Rare/Accidentel", "Espèce introduite", "Extirpé")) %>%
+  select(Island_name, binomial) %>% rename(species = binomial)
+length(unique(masc_bl$species)) # 99 native birds
 
 
-
-# shape all databases in long format
 # bind all archipelagoes together for the clean final checklist
 
-azo_b <- azo_birds %>%
-  select(-Comments) %>%
-  pivot_longer(cols = Corvo:Santa.Maria, names_to = "Island", values_to = "Occ") %>%
-  filter(Occ==1) %>%
-  mutate(Species = gsub("_"," ", species)) %>%
-  filter(Status=="NATIVE")
+bird_ckl_clean <- left_join(
+  bind_rows(masc_bl, azo_bl, cn_bl, hw_bl, glp_bl),
+  isl_select %>% select(Island_name, ID)) %>%
+  rename(ULM_ID = ID)
+length(unique(bird_ckl_clean$species)) # 253 native birds
+length(unique(bird_ckl_clean$Island_name)) # on 37 islands
 
-
-
-hw_b <- hw_b[1:38,] %>%
-  mutate(Species = gsub("_"," ", species)) %>%
-  pull(Species)
-
-cn_b <- cn_b[1:74,] %>%
-  mutate(Species = gsub("_"," ", species)) %>%
-  pull(Species)
-
-cn_b2 <- cn_b2 %>% pull(Species)
-
-cn_btot <- unique(c(cn_b, cn_b2))
-
-masc_b <- unique(masc %>%
-                   filter(!is.na(binomial)) %>%
-                   filter(!status %in% c("Rare/Accidentel", "Espèce introduite", "Extirpé")) %>%
-                   pull(binomial))
+# carreful: need to be cleaned with trait script (12_Vertebrate_traits)
+saveRDS(bird_ckl_clean, "data/derived-data/10_bird_ckl_islands_notclean.RDS")
 
 #### MAMMALS ####
 

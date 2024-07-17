@@ -104,15 +104,31 @@ hb_m <- hab_breadth %>% filter(scientificName %in% mam_all)
 # (logical since the names come from IUCN ranges)
 
 
-#### COMBINE and AVONET for other traits #####
+#### Load other trait databases #####
+
 
 pathtrait="Z:/THESE/5_Data/Traits/"
+
+# BIRDS
+
+# Avonet for HWI, body mass, range size
 avonet <- openxlsx::read.xlsx(paste0(
   pathtrait, "Birds_AVONET_Tobias/Supplementary dataset 1.xlsx"), sheet = 2)
 avo_taxo <- read.csv2(paste0(
   pathtrait, "Birds_AVONET_Tobias/AVONET_binomial_corresp.csv"))%>%
   select(Species1_BirdLife:Species3_BirdTree) %>%
   distinct()
+# amniote (for clutch size)
+amniote <- read.csv(paste0(pathtrait, "Amniote_Database_Aug_2015.csv"))
+# generation legnth estimates for all birds
+# From Bird et al 2020 database
+gl <- openxlsx::read.xlsx(paste0(pathtrait, "Bird_et_al_2020_Bird_generation_length_estimates.xlsx"))
+# EltonTrait to have Diet_breadth
+elton <- read.csv2(paste0(
+  pathtrait, "EltonTraits_Birds_WIlman_2014.csv"))
+
+# MAMMALS
+
 # combine: reported traits only
 comb_rep <- read.csv(paste0(
   pathtrait, "Mammals_COMBINE_archives/trait_data_reported.csv"))
@@ -120,9 +136,7 @@ comb_rep <- read.csv(paste0(
 comb_imp <- read.csv(paste0(
   pathtrait, "Mammals_COMBINE_archives/trait_data_imputed.csv"))
 
-
-
-#### SELECT TRAITS ####
+#### SELECT TRAITS AND MATCH TAXONOMIES ####
 
 # MAMMALS 
 
@@ -156,7 +170,9 @@ traits_m_all <- traits_m_all %>%
   select(-habitat_breadth_n) %>% rename(hab_breadth = n)
 
 # save trait data
-saveRDS(traits_m_all, "data/derived-data/12_Mammal_traits.csv")
+saveRDS(traits_m_all, "data/derived-data/12_Mammal_traits.RDS")
+
+
 
 # BIRDS
 
@@ -166,13 +182,13 @@ avo_b <- avonet %>%
 not_avo <- hb_b_all %>% filter(!sci_name_IUCN %in% avo_b$Species1) %>% pull(sci_name_IUCN)
 
 # Find synonyms using rredlist and IUCN API key
-syno <- data.frame()
-for (i in 1:length(not_avo)){
-  obj <- rredlist::rl_synonyms(not_avo[i],
-                               key = "0e9cc2da03be72f04b5ddb679f769bc29834a110579ccdbeb54b79c22d3dd53d")
-  syno <- bind_rows(syno, obj$result)
-  saveRDS(syno, "data/derived-data/12_synonyms_birds_IUCN_AVONET.rds")
-}
+# syno <- data.frame()
+# for (i in 1:length(not_avo)){
+#   obj <- rredlist::rl_synonyms(not_avo[i],
+#                                key = "0e9cc2da03be72f04b5ddb679f769bc29834a110579ccdbeb54b79c22d3dd53d")
+#   syno <- bind_rows(syno, obj$result)
+#   saveRDS(syno, "data/derived-data/12_synonyms_birds_IUCN_AVONET.rds")
+# }
 syno <- readRDS("data/derived-data/12_synonyms_birds_IUCN_AVONET.rds")
 
 sum(avo_taxo$Species2_eBird %in% syno$synonym)
@@ -216,11 +232,111 @@ hb_avo_birds <- left_join(avo_tot, hb_b_all) %>%
 length(unique(hb_avo_birds$sci_name_IUCN))
 # 219 extant birds in total on all islands
 
-# need to add generation length or clutch size from amniote
 
-# main diet from EltonTrait to have Diet_breadth
-# use raw database --> see if 
+# clutch size 
+amniote_birds <- amniote %>%
+  mutate(binomial=paste(genus, species, sep=" ")) %>%
+  filter(class=="Aves") %>%
+  select(class, binomial, litter_or_clutch_size_n) %>%
+  mutate_all(as.factor) %>%
+  mutate(litter_or_clutch_size_n = as.character(litter_or_clutch_size_n)) %>%
+  mutate_if(is.character,function(x) gsub("-999", NA, x)) %>%
+  mutate_if(is.character,as.numeric)
+sum(!is.na(amniote_birds$litter_or_clutch_size_n))
 
+clutch_b <- amniote_birds %>%
+  filter(binomial %in% unique(hb_avo_birds$sci_name_IUCN))
+
+# generation length 
+gl_b <- gl %>%
+  filter(Scientific.name %in% unique(hb_avo_birds$sci_name_IUCN)) %>%
+  mutate(sci_name_IUCN = Scientific.name)
+
+# check missing species
+setdiff(hb_avo_birds$sci_name_IUCN, gl_b$Scientific.name)
+# 3 missing sp with synonyms to add
+gl_to_add <- gl %>% 
+  filter(Scientific.name %in% c(
+    "Psittacula eques", "Sylvia conspicillata", "Sylvia melanocephala")) %>%
+  mutate(sci_name_IUCN = case_when(
+    Scientific.name == "Psittacula eques" ~ "Alexandrinus eques",
+    Scientific.name == "Sylvia conspicillata" ~ "Curruca conspicillata",
+    Scientific.name == "Sylvia melanocephala" ~ "Curruca melanocephala"
+  ))
+
+gl_all <- bind_rows(gl_b, gl_to_add)
+
+hb_avo_gl <- left_join(hb_avo_birds, gl_all %>% select(sci_name_IUCN, GenLength))
+
+
+# diet breadth
+elton_db <- elton %>%
+  select(Scientific, Diet.Inv:Diet.PlantO)
+
+elton_db[elton_db==0] <- NA
+elton_db$nb_diet <- rowSums(!is.na(elton_db))-1
+
+
+db <- elton_db %>%
+  select(Scientific, nb_diet) %>%
+  filter(Scientific %in% unique(hb_avo_birds$sci_name_IUCN)) %>%
+  mutate(sci_name_IUCN = Scientific)
+
+# 39 species are missing, need to find synonyms
+sp_to_find_elton <- setdiff(unique(hb_avo_birds$sci_name_IUCN), db$Scientific)
+
+# Find synonyms using rredlist and IUCN API key
+# syno_elton <- data.frame()
+# 
+# for (i in 1:length(sp_to_find_elton)){
+#   obj <- rredlist::rl_synonyms(sp_to_find_elton[i],
+#                      key = "0e9cc2da03be72f04b5ddb679f769bc29834a110579ccdbeb54b79c22d3dd53d")
+#   syno_elton <- bind_rows(syno_elton, obj$result)
+#   saveRDS(syno_elton, "data/derived-data/12_synonyms_birds_Elton.rds")
+# }
+syno_elton <- readRDS("data/derived-data/12_synonyms_birds_Elton.rds")
+length(unique(syno_elton$accepted_name))
+
+db_syno <- elton_db %>%
+  select(Scientific, nb_diet) %>%
+  filter(Scientific %in% unique(syno_elton$synonym))
+db_syno <- left_join(
+  db_syno, 
+  syno_elton %>% distinct(accepted_name, synonym) %>%
+    rename(Scientific = synonym)) %>%
+  rename(sci_name_IUCN = accepted_name)
+
+db_all <- bind_rows(db, db_syno)
+
+setdiff(unique(hb_avo_birds$sci_name_IUCN), unique(db_all$sci_name_IUCN))
+# 5 species without correspondance, check manually
+# Nesoenas picturatus = Nesoenas picturata
+# Alaudala rufescens = Calandrella rufescens
+# Cyanistes teneriffae = Parus teneriffae
+# Zosterops mauritianus = same diet breadth as Zosterops borbonicus
+# Puffinus bailloni = Puffinus lherminieri
+# elton_db %>% filter(Scientific=="Parus teneriffae")
+corresp <- c("Nesoenas picturatus" = "Nesoenas picturata",
+             "Alaudala rufescens" = "Calandrella rufescens",
+             "Cyanistes teneriffae" = "Parus teneriffae",
+             "Zosterops mauritianus" = "Zosterops borbonicus",
+             "Puffinus bailloni" = "Puffinus lherminieri")
+
+db_to_add <- elton_db %>%
+  filter(Scientific %in% corresp) %>% mutate(sci_name_IUCN = Scientific) %>%
+  select(Scientific, sci_name_IUCN, nb_diet)
+for(i in 1:length(corresp)){
+  db_to_add$sci_name_IUCN[i] = names(corresp[corresp==db_to_add$Scientific[i]])
+}
+
+db_all <- bind_rows(db_all, db_to_add)
+
+
+traits_b_all <- left_join(hb_avo_gl, db_all %>% select(-Scientific)) %>%
+  rename(nb_hab = n) %>%
+  select(-Species1)
+
+saveRDS(traits_b_all, "data/derived-data/12_Bird_traits.RDS")
 
 
 ##### create clean ckl file for islands ####

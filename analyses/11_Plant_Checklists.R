@@ -190,18 +190,143 @@ saveRDS(db_isl, "data/derived-data/11_isl_with_gift_data.rds")
 # save nb of alien plants for exposure to IAS
 saveRDS(status_w, "data/derived-data/11_nb_native_alien_plants.rds")
 
+
+
+
 # 2. Traits -------------------------------------------------------------------
+
+
+# Extract species names from selected islands
+# keep only native species
+sp <- isl_subset %>%
+  mutate(Status = case_when(
+    native == 1 & naturalized == 0 ~ "native",
+    native == 1 & is.na(naturalized) ~ "native",
+    native == 0 & is.na(naturalized) ~ "non-native",
+    native == 0 & naturalized == 1 ~ "naturalized",
+    native == 0 & naturalized == 0 ~ "non-native",
+    is.na(native) & is.na(naturalized) ~ "unknown")) %>% 
+  filter(Status=="native") %>% 
+  distinct(work_species) %>%
+  separate(work_species, c("genus","epithet"), extra = "merge", fill = "left")
+
+
+colnames(isl_subset)
+sp <- isl_subset 
+length(unique(sp %>% pull(work_species)))
+
+#### Get species range size ####
+
+# get shapes of all polygons in GIFT
+# gift_shapes <- GIFT_shapes() # takes ~20min
+# saveRDS(gift_shapes, "data/raw-data/11_gift_shapes.rds")
+gift_shapes <- readRDS("data/raw-data/11_gift_shapes.rds")
+str(gift_shapes)
+ggplot(gift_shapes)+
+  geom_sf()
+
+
+# get distribution for each species
+
+# distrib <- data.frame()
+# for (i in 1:nrow(sp)){ # takes time ~5h
+#   distrib_temp <- GIFT::GIFT_species_distribution(
+#     genus = sp$genus[i],
+#     epithet = sp$epithet[i]
+#   )
+#   distrib <- bind_rows(distrib, distrib_temp)
+#   
+#   saveRDS(distrib, "data/raw-data/11_gift_distrib_native_plants_55isl.rds")
+#   print(i)
+# }
+# 
+# # only one species without info : i = 3577
+# sp[3577,] # => Marchus kochia littorea
+# # try with Marcus-kochia littorea
+# distrib_temp <- GIFT::GIFT_species_distribution(
+#   genus = "Marcus-kochia",
+#   epithet = "littorea"
+# )
+# distrib <- bind_rows(distrib, distrib_temp)
+# saveRDS(distrib, "data/raw-data/11_gift_distrib_native_plants_55isl.rds")
+
+
+# calculate species range 
+
+distrib <- readRDS("data/raw-data/11_gift_distrib_native_plants_55isl.rds")
+
+
+head(distrib)
+
+distrib_stat <- distrib %>%
+  mutate(native = ifelse(native == 1, "native", "non-native"),
+                              naturalized = ifelse(naturalized == 1, "naturalized",
+                                                   "non-naturalized"),
+                              endemic_list = ifelse(endemic_list == 1, "endemic_list",
+                                                    "non-endemic_list")) %>%
+  dplyr::select(entity_ID, work_species, native, naturalized, endemic_list) %>%
+  mutate(Status = case_when(
+    native == "native" & naturalized == "non-naturalized" ~ "native",
+    native == "native" & is.na(naturalized) ~ "native",
+    native == "non-native" & is.na(naturalized) ~ "non-native",
+    native == "non-native" & naturalized == "naturalized" ~ "naturalized",
+    native == "non-native" & naturalized == "non-naturalized" ~ "non-native",
+    is.na(native) & is.na(naturalized) ~ "unknown"
+  )) %>% distinct()
+
+table(distrib_stat$Status)
+
+# filter native and naturalized range 
+# gives an idea to how much a plant is adapted to different bioclimatic conditions
+
+distrib_area <- left_join(
+  distrib_stat %>% filter(Status %in% c("native", "naturalized")),
+  gift_shapes %>% sf::st_drop_geometry()
+) %>% 
+  filter(!is.na(area)) %>% # some geo entity have no correspondance (wider regions?)
+  group_by(work_species, Status) %>%
+  summarize(range_size = sum(area)) %>%
+  pivot_wider(names_from = Status, values_from = range_size, values_fill = 0) %>%
+  mutate(tot_range = native + naturalized) %>%
+  rename(native_range = native,
+         naturalized_range = naturalized)
+
+ggplot(distrib_area)+
+  geom_point(aes(x=native_range, y = tot_range))+
+  geom_abline(slope = 1, intercept = 0)
+
+ggplot(distrib_area)+
+  geom_histogram(aes(x= tot_range))
+
+nrow(distrib_area) == nrow(sp)
+
+
+
+#### Get species level traits from GIFT ####
+
 # Metadata for the trait table
 tra_meta <- GIFT_traits_meta() # from this table we use the column Lvl3 in the next function
 
 # Retrieving traits
-tra <- GIFT_traits(trait_IDs = c("1.6.2", # maximal height
-                                 "1.3.1", # epiphyte
-                                 "1.2.1", "1.2.2", # growth form
-                                 "4.6.2")) # Leaf_length_max
+tra <- GIFT_traits(trait_IDs = c(
+  "2.1.1", # life history => lifecyle
+  "1.1.1", "1.2.1", "1.6.2", # morphology => woodiness, growth form, max height
+  "3.2.3", "3.7.1","3.7.2","3.3.1"# reproduction => seed mass, flowering time, dispersal syndrome
+  ))
 
-gift_isl_tra <- left_join(isl_subset, tra,
-                          by = c("work_ID", "work_species", "work_author"))
+
+gift_isl_tra <- left_join(distrib_area, tra %>% select(work_ID:trait_value_3.3.1))
+
+colnames(gift_isl_tra)
+
+colSums(is.na(gift_isl_tra))/nrow(sp)
+
+
+###### ADD TRAITS FROM TRY #####
+
+# 1. create a TRY user account
+# 2. select the traits you need
+try_tr <- read_tsv("data/raw-data/TRY_trait_list_tde202473114744.txt")
 
 
 # 3. Documentation ------------------------------------------------------------

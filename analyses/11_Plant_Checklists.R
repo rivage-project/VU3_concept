@@ -211,8 +211,8 @@ sp <- isl_subset %>%
   separate(work_species, c("genus","epithet"), extra = "merge", fill = "left")
 
 
-colnames(isl_subset)
-sp <- isl_subset 
+#colnames(isl_subset)
+#sp <- isl_subset 
 length(unique(sp %>% pull(work_species)))
 
 #### Get species range size ####
@@ -321,12 +321,139 @@ colnames(gift_isl_tra)
 
 colSums(is.na(gift_isl_tra))/nrow(sp)
 
+# for each island, how many traits 
+
 
 ###### ADD TRAITS FROM TRY #####
 
 # 1. create a TRY user account
 # 2. select the traits you need
 try_tr <- read_tsv("data/raw-data/TRY_trait_list_tde202473114744.txt")
+# 3. send a request on the TRY website, for all species
+# requested traits (July 31st, 2024):
+# plant growth form, dispersal syndrome, seed dry mass, 
+# plant height, plant flowering time, seed bank type
+# 4. wait for the request (2-3 days if only public data, >2 weeks if non-public ones)
+
+# text file to read with rtry
+# install.packages("rtry")
+
+try <- rtry::rtry_import("data/raw-data/TRY_request_traits_35151_01082024012921/35151.txt")
+
+large_data <- data.table::fread(
+  "data/raw-data/TRY_request_traits_35151_01082024012921/35151.txt", sep = "\t")
+
+
+try1 <- readr::read_tsv_chunked(
+  "data/raw-data/TRY_request_traits_35151_01082024012921/35151.txt",
+  chunk_size = 100000,
+  col_names = TRUE,
+  col_types = NULL,
+  na = c("", "NA"),
+  quoted_na = TRUE,
+  quote = "\"",
+  comment = "",
+  trim_ws = TRUE,
+  skip = 0,
+  skip_empty_rows = TRUE
+)
+
+file.info("data/raw-data/TRY_request_traits_35151_01082024012921/35151.txt")$size
+# 17 Go
+
+head <- readr::read_delim(
+  "data/raw-data/TRY_request_traits_35151_01082024012921/35151.txt", delim = "\t", n_max = 10)
+View(head)
+colnames(head)
+
+# select only columns of interest
+# and select plants from list
+sp <- isl_subset %>%
+  mutate(Status = case_when(
+    native == 1 & naturalized == 0 ~ "native",
+    native == 1 & is.na(naturalized) ~ "native",
+    native == 0 & is.na(naturalized) ~ "non-native",
+    native == 0 & naturalized == 1 ~ "naturalized",
+    native == 0 & naturalized == 0 ~ "non-native",
+    is.na(native) & is.na(naturalized) ~ "unknown")) %>% 
+  filter(Status=="native") %>% 
+  distinct(work_species) %>% pull(work_species)
+  
+  
+# Define a function to process each chunck
+process_chunk <- function(chunk, pos) {
+  # Your processing code here
+  chunk_short <- chunk %>%
+    dplyr::select(DatasetID, SpeciesName, AccSpeciesName, TraitID, 
+           TraitName, OrigValueStr, OrigUnitStr, StdValue, UnitName) %>%
+    dplyr::filter(AccSpeciesName %in% sp | SpeciesName %in% sp)
+  return(chunk_short)
+}
+process <- function(x, pos) subset(x, AccSpeciesName %in% sp) 
+
+# Read the file in chunks
+
+chunked_df <- readr::read_delim_chunked(
+  "data/raw-data/TRY_request_traits_35151_01082024012921/35151.txt", 
+  delim = "\t", 
+  callback = DataFrameCallback$new(process), 
+  chunk_size = 1000000 # Adjust the chunk size as needed
+)
+  
+
+file_path <- "data/raw-data/TRY_request_traits_35151_01082024012921/35151.txt"
+
+# Approximation of the number of lines
+
+# open a connection with the file
+con <- file(file_path, "r")
+# Initialize a counter
+line_count <- 0
+# Read and count lines
+while (length(readLines(con, n = 1000, warn = FALSE)) > 0) {
+  line_count <- line_count + 1000
+}
+# Close the connection
+close(con)
+# Print the number of lines
+print(line_count)
+
+# tot_l = 33805000
+
+all=data.frame()
+
+for(i in 1:34){ # apparently only 11.10^6 rows
+  end = i*1000000
+  start = end-1000000
+  
+  temp <- readr::read_delim(
+    "data/raw-data/TRY_request_traits_35151_01082024012921/35151.txt", 
+    delim = "\t",
+    skip = start,
+    n_max = 1000000,
+    col_names = colnames(head),
+    col_select = c(Dataset, SpeciesName, AccSpeciesName, TraitID, 
+                   TraitName, OrigValueStr, OrigUnitStr, StdValue, UnitName, Comment)
+  ) %>% 
+    dplyr::filter(AccSpeciesName %in% sp | SpeciesName %in% sp) %>%
+    dplyr::filter(!is.na(TraitID)) %>%
+    dplyr::mutate_all(as.character)
+  
+  all <- bind_rows(all, temp)
+  print(i)
+}
+
+saveRDS(all, "data/derived-data/11_TRY_traits_for_selected_sp.RDS")
+
+all <- readRDS("data/derived-data/11_TRY_traits_for_selected_sp.RDS")
+
+length(unique(all$AccSpeciesName))
+
+# aggregate the TRY traits at the species level
+# and complete the GIFT database
+
+
+
 
 
 # 3. Documentation ------------------------------------------------------------
@@ -351,10 +478,4 @@ try_tr <- read_tsv("data/raw-data/TRY_trait_list_tde202473114744.txt")
 # the other columns refer to the agreement score for categorical traits, the
 # coefficient of variation for continuous traits, and the references where we
 # extracted the values from
-
-
-
-table(isl_subset$geo_entity)
-length(unique(isl_subset$geo_entity))
-table()
 

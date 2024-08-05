@@ -213,7 +213,7 @@ sp <- isl_subset %>%
 
 #colnames(isl_subset)
 #sp <- isl_subset 
-length(unique(sp %>% pull(work_species)))
+#length(unique(sp %>% pull(work_species)))
 
 #### Get species range size ####
 
@@ -307,21 +307,84 @@ nrow(distrib_area) == nrow(sp)
 # Metadata for the trait table
 tra_meta <- GIFT_traits_meta() # from this table we use the column Lvl3 in the next function
 
-# Retrieving traits
-tra <- GIFT_traits(trait_IDs = c(
-  "2.1.1", # life history => lifecyle
-  "1.1.1", "1.2.1", "1.6.2", # morphology => woodiness, growth form, max height
-  "3.2.3", "3.7.1","3.7.2","3.3.1"# reproduction => seed mass, flowering time, dispersal syndrome
-  ))
+# Retrieving traits (takes >5min)
+# tra <- GIFT_traits(trait_IDs = c(
+#   "2.1.1", # life history => lifecyle
+#   "1.1.1", "1.2.1", "1.6.2", # morphology => woodiness, growth form, max height
+#   "3.2.3", "3.7.1","3.7.2","3.3.1"# reproduction => seed mass, flowering time, dispersal syndrome
+#   ))
+# gift_isl_tra <- left_join(distrib_area, tra %>% select(work_ID:trait_value_3.3.1))
+# saveRDS(gift_isl_tra, "data/derived-data/11_GIFT_traits_isl.rds")
 
-
-gift_isl_tra <- left_join(distrib_area, tra %>% select(work_ID:trait_value_3.3.1))
-
+gift_isl_tra <- readRDS("data/derived-data/11_GIFT_traits_isl.rds") %>% ungroup()
 colnames(gift_isl_tra)
 
+# missing values for the selected traits and plants
 colSums(is.na(gift_isl_tra))/nrow(sp)
 
-# for each island, how many traits 
+str(gift_isl_tra)
+
+# order traits when needed
+unique(gift_isl_tra$trait_value_2.1.1) # life cycle
+table(gift_isl_tra$trait_value_2.1.1) # life cycle
+unique(gift_isl_tra$trait_value_1.1.1) # woodiness
+table(gift_isl_tra$trait_value_1.1.1) # woodiness
+unique(gift_isl_tra$trait_value_1.2.1) # growth form 
+table(gift_isl_tra$trait_value_1.2.1) # growth form 
+summary(gift_isl_tra$trait_value_1.6.2) # max height
+summary(gift_isl_tra$trait_value_3.2.3) # seed mass
+unique(gift_isl_tra$trait_value_3.3.1) # dispersal syndrome
+table(gift_isl_tra$trait_value_3.3.1) # dispersal syndrome
+
+gift_tr <- gift_isl_tra %>% 
+  mutate(lifecycle = factor(trait_value_2.1.1, ordered = T, 
+                            levels = c("annual","biennial","perennial")),
+         woodiness = factor(trait_value_1.1.1, ordered = T,
+                            levels = c("non-woody", "variable", "woody")),
+         growthform = factor(trait_value_1.2.1, ordered = T,
+                             levels = c("herb", "shrub", "tree"))) %>%
+  rename(max_height = trait_value_1.6.2,
+         seed_mass = trait_value_3.2.3) %>%
+  dplyr::select(work_species:tot_range, max_height, seed_mass, lifecycle:growthform)
+
+colnames(gift_tr)
+summary(gift_tr)
+
+# get species name for NA
+
+na_seed <- gift_tr %>% filter(is.na(seed_mass)) %>% pull(work_species)
+na_height <- gift_tr %>% filter(is.na(max_height)) %>% pull(work_species)
+na_growth <- gift_tr %>% filter(is.na(growthform)) %>% pull(work_species)
+na_disp <- gift_isl_tra %>% filter(is.na(trait_value_3.3.1)) %>% pull(work_species)
+na_cycle <- gift_isl_tra %>% filter(is.na(trait_value_2.1.1)) %>% pull(work_species)
+
+# get potential synonyms for species with missing values
+
+gift_name <- unique(c(na_disp, na_growth, na_height, na_seed, na_cycle))
+
+# syno = data.frame()
+# k=0
+# 
+# for (i in gift_name){
+#   # i = "Cleome spinosa"
+#   # i = "Convolvulus floridus"
+#   syno_i <- taxize::synonyms(i, db = "itis", rows =  2)[[1]]
+#   
+#   if(class(syno_i) == "data.frame"){
+#     if(nrow(syno_i)>0){
+#       syno_i$gift_name = i
+#       syno = bind_rows(syno, syno_i)
+#     }}
+#   k=k+1
+#   print(k)
+# }
+# saveRDS(syno, "data/derived-data/11_Syno_GIFT_plants_taxize.rds")
+
+syno <- readRDS("data/derived-data/11_Syno_GIFT_plants_taxize.rds")
+
+syno_simple <- syno %>% mutate(
+  syno_simple = stringr::word(syn_name, 1, 2)
+)
 
 
 ###### ADD TRAITS FROM TRY #####
@@ -329,105 +392,52 @@ colSums(is.na(gift_isl_tra))/nrow(sp)
 # 1. create a TRY user account
 # 2. select the traits you need
 try_tr <- read_tsv("data/raw-data/TRY_trait_list_tde202473114744.txt")
+try_tr[grepl("life",try_tr$Trait),]
+try_tr[grepl("form",try_tr$Trait), "Trait"] # check existing traits
 # 3. send a request on the TRY website, for all species
 # requested traits (July 31st, 2024):
 # plant growth form, dispersal syndrome, seed dry mass, 
 # plant height, plant flowering time, seed bank type
+# + planth growth form simple + plant life form + plant lifespan
 # 4. wait for the request (2-3 days if only public data, >2 weeks if non-public ones)
+# 5. open TRY file => needs to be chuncked bc too large
 
-# text file to read with rtry
+file_path <- "data/raw-data/TRY_request_traits_35151_01082024012921/35151.txt"
+file_path2
+
+file.info(file_path)$size # 17 Go
+file.info(file_path2)$size # X Go
+
+# text file to read with rtry?
 # install.packages("rtry")
+# try <- rtry::rtry_import("data/raw-data/TRY_request_traits_35151_01082024012921/35151.txt")
+# # impossible to open such big file
+# large_data <- data.table::fread(
+#   "data/raw-data/TRY_request_traits_35151_01082024012921/35151.txt", sep = "\t")
+# does not work with these functions
+# neither with the chuncked function => see draft part (end of script)
 
-try <- rtry::rtry_import("data/raw-data/TRY_request_traits_35151_01082024012921/35151.txt")
-
-large_data <- data.table::fread(
-  "data/raw-data/TRY_request_traits_35151_01082024012921/35151.txt", sep = "\t")
-
-
-try1 <- readr::read_tsv_chunked(
-  "data/raw-data/TRY_request_traits_35151_01082024012921/35151.txt",
-  chunk_size = 100000,
-  col_names = TRUE,
-  col_types = NULL,
-  na = c("", "NA"),
-  quoted_na = TRUE,
-  quote = "\"",
-  comment = "",
-  trim_ws = TRUE,
-  skip = 0,
-  skip_empty_rows = TRUE
-)
-
-file.info("data/raw-data/TRY_request_traits_35151_01082024012921/35151.txt")$size
-# 17 Go
-
-head <- readr::read_delim(
-  "data/raw-data/TRY_request_traits_35151_01082024012921/35151.txt", delim = "\t", n_max = 10)
+# get the column names + the file structure
+head <- readr::read_delim(file_path, delim = "\t", n_max = 10)
 View(head)
 colnames(head)
 
-# select only columns of interest
-# and select plants from list
-sp <- isl_subset %>%
-  mutate(Status = case_when(
-    native == 1 & naturalized == 0 ~ "native",
-    native == 1 & is.na(naturalized) ~ "native",
-    native == 0 & is.na(naturalized) ~ "non-native",
-    native == 0 & naturalized == 1 ~ "naturalized",
-    native == 0 & naturalized == 0 ~ "non-native",
-    is.na(native) & is.na(naturalized) ~ "unknown")) %>% 
-  filter(Status=="native") %>% 
-  distinct(work_species) %>% pull(work_species)
-  
-  
-# Define a function to process each chunck
-process_chunk <- function(chunk, pos) {
-  # Your processing code here
-  chunk_short <- chunk %>%
-    dplyr::select(DatasetID, SpeciesName, AccSpeciesName, TraitID, 
-           TraitName, OrigValueStr, OrigUnitStr, StdValue, UnitName) %>%
-    dplyr::filter(AccSpeciesName %in% sp | SpeciesName %in% sp)
-  return(chunk_short)
-}
-process <- function(x, pos) subset(x, AccSpeciesName %in% sp) 
-
-# Read the file in chunks
-
-chunked_df <- readr::read_delim_chunked(
-  "data/raw-data/TRY_request_traits_35151_01082024012921/35151.txt", 
-  delim = "\t", 
-  callback = DataFrameCallback$new(process), 
-  chunk_size = 1000000 # Adjust the chunk size as needed
-)
-  
-
-file_path <- "data/raw-data/TRY_request_traits_35151_01082024012921/35151.txt"
-
-# Approximation of the number of lines
-
-# open a connection with the file
-con <- file(file_path, "r")
-# Initialize a counter
-line_count <- 0
-# Read and count lines
-while (length(readLines(con, n = 1000, warn = FALSE)) > 0) {
-  line_count <- line_count + 1000
-}
-# Close the connection
-close(con)
-# Print the number of lines
-print(line_count)
-
-# tot_l = 33805000
 
 all=data.frame()
 
-for(i in 1:34){ # apparently only 11.10^6 rows
+# select only species for which trait data are missing
+# including their synonyms, to match the more possible sp
+# select only columns of interest to reduce the size of the dataframe
+
+sp_and_syno <- unique(c(gift_name, syno_simple$syno_simple, syno$acc_name))
+
+
+for(i in 1:12){ # apparently only 11.10^6 rows
   end = i*1000000
   start = end-1000000
   
   temp <- readr::read_delim(
-    "data/raw-data/TRY_request_traits_35151_01082024012921/35151.txt", 
+    file_path, 
     delim = "\t",
     skip = start,
     n_max = 1000000,
@@ -435,7 +445,8 @@ for(i in 1:34){ # apparently only 11.10^6 rows
     col_select = c(Dataset, SpeciesName, AccSpeciesName, TraitID, 
                    TraitName, OrigValueStr, OrigUnitStr, StdValue, UnitName, Comment)
   ) %>% 
-    dplyr::filter(AccSpeciesName %in% sp | SpeciesName %in% sp) %>%
+    dplyr::filter(AccSpeciesName %in% sp_and_syno | 
+                    SpeciesName %in% sp_and_syno) %>%
     dplyr::filter(!is.na(TraitID)) %>%
     dplyr::mutate_all(as.character)
   
@@ -443,14 +454,124 @@ for(i in 1:34){ # apparently only 11.10^6 rows
   print(i)
 }
 
-saveRDS(all, "data/derived-data/11_TRY_traits_for_selected_sp.RDS")
+saveRDS(all, "data/derived-data/11_TRY_traits_for_missing_sp_and_syno.RDS")
 
-all <- readRDS("data/derived-data/11_TRY_traits_for_selected_sp.RDS")
-
+all2 <- readRDS("data/derived-data/11_TRY_traits_for_selected_sp.RDS")
+all <- readRDS("data/derived-data/11_TRY_traits_for_missing_sp_and_syno.RDS")
+unique(all$TraitID)
+unique(all$TraitName)
 length(unique(all$AccSpeciesName))
+# number of species before adding synonyms
+length(unique(all2$AccSpeciesName[all2$AccSpeciesName %in% gift_name]))
 
-# aggregate the TRY traits at the species level
-# and complete the GIFT database
+# how many species in addition with at least one NA, when including syno?
+setdiff(all$AccSpeciesName, all2$AccSpeciesName)
+
+
+# for each trait, what are the species with info
+# that could complete the missing values
+
+#### REPRENDRE ICI
+# na growth + syno des sp qui sont dans na growth
+# pour avoir le nb d'espèceq qu'on a en plus
+
+# growth form
+sum(na_growth %in% (all %>% filter(TraitID %in% c("42", "3400","3401")) %>% pull(AccSpeciesName)))
+# 201 additional species
+
+# maximum height
+sum(na_height %in% (all %>% filter(TraitID %in% c("3106", "18")) %>% pull(AccSpeciesName)))
+# 76 additional species
+
+# seed mass
+length(unique(all %>% filter(TraitID %in% c("26")) %>% pull(AccSpeciesName)))
+sum(na_seed %in% (all %>% filter(TraitID %in% c("26")) %>% pull(AccSpeciesName)))
+# 279 additional species
+
+# dispersal syndrome
+length(unique(all %>% filter(TraitID %in% c("28")) %>% pull(AccSpeciesName)))
+sum(na_disp %in% (all %>% filter(TraitID %in% c("28")) %>% pull(AccSpeciesName)))
+# 711 additional species
+
+
+# test to aggregate trait values
+
+
+# separate categorial and numeric traits
+tr_num <- all %>%
+  filter(TraitID %in% c("3106", "18", "26"))
+tr_cat <- all %>%
+  filter(!TraitID %in% c("3106", "18", "26"))
+nrow(tr_cat)+nrow(tr_num)
+
+
+colSums(is.na(tr_num))
+
+tr_height <- tr_num %>%
+  filter(TraitID=="3106") %>%
+  filter(!is.na(StdValue)) %>%
+  mutate(StdValue=as.numeric(StdValue)) %>%
+  # filter only species for which we need the info
+  filter(AccSpeciesName %in% na_height) %>%
+  # remove some absurd values (all above 65 were errors)
+  # filter(StdValue<65) %>%
+  # filter(! (AccSpeciesName=="Lavandula pedunculata" & StdValue>50)) %>%
+  group_by(AccSpeciesName, UnitName) %>%
+  summarise(max_height = max(StdValue),
+            med_height = median(StdValue), 
+            sd_height = sd(StdValue),
+            n_rep = n())
+
+# check using sd 
+# lavandula pedunculata => error?
+# tr_num %>% filter(AccSpeciesName=="Lavandula pedunculata")
+
+tr_seed <- tr_num %>%
+  filter(TraitID=="26") %>%
+  filter(!is.na(StdValue)) %>%
+  mutate(StdValue=as.numeric(StdValue)) %>%
+  # filter only species for which we need the info
+  filter(AccSpeciesName %in% na_seed) %>%
+  group_by(AccSpeciesName, UnitName) %>%
+  summarise(mean_seed = mean(StdValue),
+            med_seed = median(StdValue), 
+            sd_seed = sd(StdValue),
+            n_rep = n())
+
+ggplot(tr_seed)+
+  geom_point(aes(x=log(med_seed), y = log(mean_seed)))
+ggplot(tr_seed)+
+  geom_point(aes(x=(med_seed), y = (mean_seed)))
+
+# categorial traits
+unique(tr_cat$TraitName)
+
+# plant growth form
+tr_growth <- tr_cat %>% 
+  filter(TraitID %in% c("42", "3400","3401")) %>%
+  # filter only species for which we need the info
+  filter(AccSpeciesName %in% na_growth) %>%
+  distinct() %>%
+  group_by(AccSpeciesName) %>%
+  reframe(growth_temp = c(OrigValueStr))
+
+
+unique(tr_growth$OrigValueStr)
+length(unique(tr_growth$Dataset))
+
+
+# dispersal syndrome
+tr_disp <- tr_cat %>% 
+  filter(TraitID == "28") %>%
+  # filter only species for which we need the info
+  filter(AccSpeciesName %in% na_disp) %>%
+  distinct()
+%>%
+  group_by(AccSpeciesName) %>%
+  reframe(growth_temp = c(OrigValueStr))
+unique(tr_disp$OrigValueStr)
+length(unique(tr_growth$Dataset))
+
 
 
 
@@ -478,4 +599,44 @@ length(unique(all$AccSpeciesName))
 # the other columns refer to the agreement score for categorical traits, the
 # coefficient of variation for continuous traits, and the references where we
 # extracted the values from
+
+################# OPEN TRY FILE DRAFT ################
+
+
+# Define a function to process each chunck
+process_chunk <- function(chunk, pos) {
+  # Your processing code here
+  chunk_short <- chunk %>%
+    dplyr::select(DatasetID, SpeciesName, AccSpeciesName, TraitID, 
+                  TraitName, OrigValueStr, OrigUnitStr, StdValue, UnitName) %>%
+    dplyr::filter(AccSpeciesName %in% sp | SpeciesName %in% sp)
+  return(chunk_short)
+}
+process <- function(x, pos) subset(x, AccSpeciesName %in% sp) 
+
+# Read the file in chunks
+
+chunked_df <- readr::read_delim_chunked(
+  "data/raw-data/TRY_request_traits_35151_01082024012921/35151.txt", 
+  delim = "\t", 
+  callback = DataFrameCallback$new(process), 
+  chunk_size = 1000000 # Adjust the chunk size as needed
+)
+
+
+# Approximation of the number of lines
+# open a connection with the file
+con <- file(file_path, "r")
+# Initialize a counter
+line_count <- 0
+# Read and count lines
+while (length(readLines(con, n = 1000, warn = FALSE)) > 0) {
+  line_count <- line_count + 1000
+}
+# Close the connection
+close(con)
+# Print the number of lines
+print(line_count)
+# tot_l = 33805000
+
 

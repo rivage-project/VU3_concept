@@ -429,6 +429,7 @@ saveRDS(occ_clean_no_flag,
 
 
 ##### Compute alien checklists for each island ######
+
 occ <- readRDS("data/derived-data/alien_occ/22_GBIF_clean_alien_occ_124sp.rds")
 # transform occ to sf object
 
@@ -459,7 +460,7 @@ for(i in 1:length(inter)){
   if(!is_empty(inter[[i]])){
     out[[i]] = coord[inter[[i]],] %>% distinct(taxonKey, speciesKey, species, geometry)
     out[[i]]$ULM_ID = shp_44$ULM_ID[i]
-    out_df <- bind_rows(out_df, out[[i]] %>% distinct(taxonKey, speciesKey, species))
+    out_df <- bind_rows(out_df, out[[i]] %>% distinct(taxonKey, speciesKey, species, ULM_ID))
   }
 }
 
@@ -474,6 +475,9 @@ ias_archip <- left_join(
 # get the class of each species (birds and mammals)
 cklist <- readRDS("data/derived-data/alien_occ/22_list_alien_birds_mam_5_archip.rds")
 ias_archip_group <- left_join(ias_archip, cklist %>% distinct(speciesKey, class))
+mammals <- cklist %>% filter(class=="Mammalia") %>% pull(speciesKey) 
+birds <- cklist %>% filter(class=="Aves") %>% pull(speciesKey) 
+
 
 # compare with checklist of aliens in each island of Canarias
 can_bm <- pbm_alien_can %>%
@@ -516,7 +520,6 @@ for (i in unique(can_bm$ISLAND)){
 }
 
 # check the consistency with Azores from François
-
 ias_archip %>% filter(ARCHIP=="Azores")
 # more species are identified with the GRIIS / GBIF combo
 # than in the checklist from François
@@ -524,16 +527,23 @@ ias_archip %>% filter(ARCHIP=="Azores")
 
 # for each island with occ
 # count the number of 1km²-cells that have at least one alien occurrence
-
+# separately for alien birds and mammals
 df_alien_range <- data.frame()
 for (i in 1:length(out)){
   if(length(out[[i]])>0){
+    
+    out[[i]] = coord[inter[[i]],] %>% distinct(taxonKey, speciesKey, species, geometry)
+    out[[i]]$ULM_ID = shp_44$ULM_ID[i]
+    
     # transform points and polygons to Mollweide projection
     # for having an equal-area cell grid
-    
     occ <- sf::st_transform(out[[i]], crs = "+proj=moll")
-    isl <- sf::st_transform(shp_44 %>% filter(ULM_ID==unique(occ$ULM_ID)), crs = "+proj=moll")
+    # filter mam and birds to get separate cover values
+    mam <- occ %>% filter(speciesKey %in% mammals)
+    bird <- occ %>% filter(speciesKey %in% birds)
+    # nrow(occ)==nrow(mam)+nrow(bird)
     
+    isl <- sf::st_transform(shp_44 %>% filter(ULM_ID==unique(occ$ULM_ID)), crs = "+proj=moll")
     grid <- sf::st_make_grid(isl, c(1000, 1000), what = "polygons", square = T)
     grid_sf = sf::st_sf(grid) %>%
       mutate(grid_id = 1:length(lengths(grid)))
@@ -541,7 +551,9 @@ for (i in 1:length(out)){
     df <- data.frame(
       ULM_ID = isl$ULM_ID,
       island_cells = length(sf::st_intersects(isl, grid_sf)[[1]]),
-      occ_cells = length(unique(unlist(sf::st_intersects(occ, grid_sf))))
+      occ_cells_tot = length(unique(unlist(sf::st_intersects(occ, grid_sf)))),
+      occ_cells_mam = length(unique(unlist(sf::st_intersects(mam, grid_sf)))),
+      occ_cells_bird = length(unique(unlist(sf::st_intersects(bird, grid_sf))))
     )
     
     df_alien_range <- bind_rows(df_alien_range, df)
@@ -551,13 +563,11 @@ for (i in 1:length(out)){
 
 
 
-
-
 #############
 
 # Create a database with IAS info for each island
 # - nb of alien plants + prop alien plants
-# - nb of alien  birds + mammals
+# - nb of alien  birds + mammals & prop of alien birds/mam/vert
 # - % of 1km² cells with at least one alien bird/mammal occurrence
 
 # alien plants
@@ -578,16 +588,32 @@ bm <- ias_archip_group %>%
          nb_alien_bird = Aves)
 # get alien range cover
 bm_cover <- left_join(bm, df_alien_range) %>%
-  mutate(alien_vert_cover = occ_cells/island_cells)
+  mutate(alien_vert_cover = occ_cells_tot/island_cells,
+         alien_mam_cover = occ_cells_mam/island_cells,
+         alien_bird_cover = occ_cells_bird/island_cells)
 
 # bind plants and vertebrates
-expo_ias <- left_join(bm_cover, plants_ok)
+expo_ias <- left_join(bm_cover, plants_ok) %>% 
+  ungroup() %>% 
+  select(-c(ARCHIP, ISLAND, Archip, Island_name))
+
+
+# add native SR for vertebrates 
+# load native checklists
+birds <- readRDS("data/derived-data/12_bird_ckl_islands_clean.RDS")
+mam <- readRDS("data/derived-data/10_mammals_inter_isl_clean.RDS")
+# calculate SR
+sr_m <- mam %>% group_by(ULM_ID) %>% summarise(SR_mam = n()) 
+sr_b <- birds %>% group_by(ULM_ID) %>% summarise(SR_bird = n()) 
+
+colnames(expo_ias)
+expo_ias <- left_join(left_join(expo_ias, sr_m), sr_b) %>%
+  mutate(prop_alien_mam = nb_alien_mam/SR_mam,
+         prop_alien_bird = nb_alien_bird/SR_bird)
+colnames(expo_ias)
 
 # save final dataset
-saveRDS(expo_ias %>% ungroup() %>% select(-c(ARCHIP, ISLAND, Archip, Island_name)),
-        "data/derived-data/22_IAS_exposure_39_isl.rds")
-
-
+saveRDS(expo_ias, "data/derived-data/22_IAS_exposure_39_isl.rds")
 
 #############
 

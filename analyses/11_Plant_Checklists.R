@@ -189,7 +189,8 @@ ggplot(status_w, aes(x=Archip, y = prop_exo))+
 saveRDS(db_isl, "data/derived-data/11_isl_with_gift_data.rds")
 # save nb of alien plants for exposure to IAS
 saveRDS(status_w, "data/derived-data/11_nb_native_alien_plants.rds")
-
+# save isl checklist 
+saveRDS(isl_subset, "data/derived-data/11_cklists_plants_islands.rds")
 
 
 
@@ -198,6 +199,7 @@ saveRDS(status_w, "data/derived-data/11_nb_native_alien_plants.rds")
 
 # Extract species names from selected islands
 # keep only native species
+isl_subset <- readRDS("data/derived-data/11_cklists_plants_islands.rds")
 sp <- isl_subset %>%
   mutate(Status = case_when(
     native == 1 & naturalized == 0 ~ "native",
@@ -403,10 +405,10 @@ try_tr[grepl("form",try_tr$Trait), "Trait"] # check existing traits
 # 5. open TRY file => needs to be chuncked bc too large
 
 file_path <- "data/raw-data/TRY_request_traits_35151_01082024012921/35151.txt"
-file_path2
+file_path2 <- "data/raw-data/TRY_resquest_traits_2_35311_06082024031303/35311.txt"
 
 file.info(file_path)$size # 17 Go
-file.info(file_path2)$size # X Go
+file.info(file_path2)$size # 0.7 Go
 
 # text file to read with rtry?
 # install.packages("rtry")
@@ -419,8 +421,9 @@ file.info(file_path2)$size # X Go
 
 # get the column names + the file structure
 head <- readr::read_delim(file_path, delim = "\t", n_max = 10)
+head2 <- readr::read_delim(file_path2, delim = "\t", n_max = 10)
 View(head)
-colnames(head)
+colnames(head) == colnames(head2)
 
 
 all=data.frame()
@@ -431,8 +434,8 @@ all=data.frame()
 
 sp_and_syno <- unique(c(gift_name, syno_simple$syno_simple, syno$acc_name))
 
-
-for(i in 1:12){ # apparently only 11.10^6 rows
+# open file 1 in chuncks, filter and select
+for(i in 1:11){ # apparently < 11.10^6 rows
   end = i*1000000
   start = end-1000000
   
@@ -454,6 +457,20 @@ for(i in 1:12){ # apparently only 11.10^6 rows
   print(i)
 }
 
+# open second file
+
+temp <- readr::read_tsv(
+  file_path2,
+  col_names = colnames(head),
+  col_select = c(Dataset, SpeciesName, AccSpeciesName, TraitID, 
+                 TraitName, OrigValueStr, OrigUnitStr, StdValue, UnitName, Comment)
+) %>% 
+  dplyr::filter(AccSpeciesName %in% sp_and_syno | 
+                  SpeciesName %in% sp_and_syno) %>%
+  dplyr::filter(!is.na(TraitID)) %>%
+  dplyr::mutate_all(as.character)
+
+all <- bind_rows(all, temp)
 saveRDS(all, "data/derived-data/11_TRY_traits_for_missing_sp_and_syno.RDS")
 
 all2 <- readRDS("data/derived-data/11_TRY_traits_for_selected_sp.RDS")
@@ -473,25 +490,43 @@ setdiff(all$AccSpeciesName, all2$AccSpeciesName)
 
 #### REPRENDRE ICI
 # na growth + syno des sp qui sont dans na growth
-# pour avoir le nb d'espèceq qu'on a en plus
+# pour avoir le nb d'espèces qu'on a en plus
 
 # growth form
-sum(na_growth %in% (all %>% filter(TraitID %in% c("42", "3400","3401")) %>% pull(AccSpeciesName)))
-# 201 additional species
+na_growth_syno <- unique(c(na_growth, 
+  syno_simple %>% filter(gift_name %in% na_growth) %>% pull(syno_simple)))
+sum(na_growth_syno %in% (all %>% filter(TraitID %in% c("42", "3400","3401")) %>% pull(AccSpeciesName)))
+sum(na_growth_syno %in% (all %>% filter(TraitID %in% c("42", "3400","3401", "343")) %>% pull(AccSpeciesName)))
+# 281 additional species
 
 # maximum height
-sum(na_height %in% (all %>% filter(TraitID %in% c("3106", "18")) %>% pull(AccSpeciesName)))
-# 76 additional species
+na_height_syno <- unique(c(na_height, 
+                           syno_simple %>% filter(gift_name %in% na_height) %>% pull(syno_simple)))
+
+sum(na_height_syno %in% (all %>% filter(TraitID %in% c("3106", "18")) %>% pull(AccSpeciesName)))
+# 88 additional species
 
 # seed mass
 length(unique(all %>% filter(TraitID %in% c("26")) %>% pull(AccSpeciesName)))
-sum(na_seed %in% (all %>% filter(TraitID %in% c("26")) %>% pull(AccSpeciesName)))
-# 279 additional species
+na_seed_syno <- unique(c(na_seed, 
+                           syno_simple %>% filter(gift_name %in% na_seed) %>% pull(syno_simple)))
+sum(na_seed_syno %in% (all %>% filter(TraitID %in% c("26")) %>% pull(AccSpeciesName)))
+# 311 additional species
 
 # dispersal syndrome
 length(unique(all %>% filter(TraitID %in% c("28")) %>% pull(AccSpeciesName)))
-sum(na_disp %in% (all %>% filter(TraitID %in% c("28")) %>% pull(AccSpeciesName)))
-# 711 additional species
+na_disp_syno <- unique(c(na_disp, 
+                         syno_simple %>% filter(gift_name %in% na_disp) %>% pull(syno_simple)))
+sum(na_disp_syno %in% (all %>% filter(TraitID %in% c("28")) %>% pull(AccSpeciesName)))
+# 778 additional species
+
+# life span 
+na_cycle_syno <- unique(c(na_cycle, 
+                          syno_simple %>% filter(gift_name %in% na_cycle) %>% pull(syno_simple)))
+sum(na_cycle_syno %in% (all %>% filter(TraitID %in% c("59")) %>% pull(AccSpeciesName)))
+# 98 species 
+
+View(all %>% filter(TraitID %in% c("59")))
 
 
 # test to aggregate trait values
@@ -574,6 +609,12 @@ length(unique(tr_growth$Dataset))
 
 
 
+
+
+isl_subset %>% distinct(Island_name, Archip)
+
+
+print("hello doudou")
 
 
 

@@ -9,18 +9,13 @@ path_data <- "Z:/THESE/5_Data/Distribution_spatiale/"
 gadm_islands <- sf::st_read(paste0(
   path_data, "Shpfiles_iles_continent/Islands_Weigelt_reparees.shp"))
 
-isl <- readRDS("data/derived-data/11_isl_with_gift_data.rds") %>% 
-  filter(!is.na(isl_name_gift))
 isl_select <- read.csv("data/derived-data/01_selected_islands.csv")
-isl2 <- left_join(isl_select, isl) %>% rename(ULM_ID = ID)
 
-shp_44 <- gadm_islands %>% 
-  filter(ULM_ID %in% (isl_select %>% 
-                        filter(Island_name %in% isl$Island_name) %>% 
-                        pull(ID))) %>%
+shp_55 <- gadm_islands %>% 
+  filter(ULM_ID %in% isl_select$ID) %>%
   mutate(ARCHIP = if_else(ARCHIP=="Rodrigues","Mascarene Islands", ARCHIP))
 
-unique(shp_44$ARCHIP)
+unique(shp_55$ARCHIP)
 
 ###### 1. Island topography #####
 
@@ -29,7 +24,7 @@ unique(shp_44$ARCHIP)
 zfiles <- list.files("data/raw-data/elevation")[grepl(".zip", list.files("data/raw-data/elevation"))]
 dat <- data.frame()
 for(i in zfiles){
-  i="N00W090.zip"
+  #i="N00W090.zip"
   
   # read elevation file
   elev <- terra::rast(unzip(paste0("data/raw-data/elevation/", i)))
@@ -39,7 +34,7 @@ for(i in zfiles){
   all <- c(elev, tpi_tri)
   names(all) <- c("elev","TRI","TPI")
  
-  zdat <- terra::extract(all, shp_44) %>%
+  zdat <- terra::extract(all, shp_55) %>%
     filter(!(is.na(elev) & is.na(TRI) & is.na(TPI)))
 
   dat <- bind_rows(dat, zdat)
@@ -62,13 +57,13 @@ dat_isl <- dat %>%
     sd_tri = sd(TRI, na.rm = T)
   )
 
-dat_isl$ULM_ID <- shp_44$ULM_ID[dat_isl$ID]
+dat_isl$ULM_ID <- shp_55$ULM_ID[dat_isl$ID]
 
 saveRDS(dat_isl, "data/derived-data/30_extrinsic_AC_elevation.rds")
 
 #### Exploration topography
 dat_isl <- readRDS("data/derived-data/30_extrinsic_AC_elevation.rds")
-tp <- left_join(shp_44, dat_isl)
+tp <- left_join(shp_55, dat_isl)
 ggplot(tp)+
   geom_point(aes(x=mean_tpi, y=mean_tri, color = ARCHIP),
              size = 3, alpha =.5)
@@ -96,7 +91,7 @@ ggplot(tp)+
 
 path_pa <- "data/raw-data/WDPA/"
 all_isl_pa <- list()
-for(i in 0:2){
+for(i in 0:2){ # takes ~25min
   shpi <- sf::st_read(paste0(path_pa, "WDPA_May2024_Public_shp_", 
                              i, "/WDPA_May2024_Public_shp-polygons.shp"))
   shp <- shpi %>% 
@@ -109,11 +104,11 @@ for(i in 0:2){
   validshp <- shpv[sf::st_is_valid(shpv),]
   
   # call intersect function before (faster than intersection)
-  inter <- sf::st_intersects(shp_44, validshp)
+  inter <- sf::st_intersects(shp_55, validshp)
   # extract all lines from PA shp which intersects with selected isl
   test <- unique(unlist(inter))
   # call intersection to have the 
-  isl_pa <- sf::st_intersection(shp_44, validshp[test,])
+  isl_pa <- sf::st_intersection(shp_55, validshp[test,])
   
   all_isl_pa[[i+1]] <- isl_pa
   print(i)
@@ -132,7 +127,7 @@ pts <- bind_rows(pts0, pts1, pts2) %>%
   filter(IUCN_CAT %in% c("Ia","Ib","II","III","IV")) %>% 
   filter(MARINE!="2")
 
-inter_pts <- sf::st_intersects(shp_44, validshp[pts,])
+inter_pts <- sf::st_intersects(shp_55, validshp[pts,])
 length(unlist(inter_pts))
 # 0 island has any point from WDPA data 
 
@@ -149,16 +144,16 @@ for(i in unique(isl_pa_df$ULM_ID)){
   d <- bind_rows(d, c)
 }
 
-prop_pa <- left_join(d, shp_44 %>% select(ULM_ID, ISLAND, ARCHIP) %>% mutate(area = sf::st_area(geometry))) %>%
+prop_pa <- left_join(d, shp_55 %>% select(ULM_ID, ISLAND, ARCHIP) %>% mutate(area = sf::st_area(geometry))) %>%
   mutate(PA_prop = round(pa_area/area, 4))
 
 saveRDS(prop_pa, "data/derived-data/30_extrinsic_AC_prop_PA.rds")
 
 #### Exploration pa coverage
 prop_pa <- readRDS("data/derived-data/30_extrinsic_AC_prop_PA.rds")
-pa <- left_join(shp_44, prop_pa)
+pa <- left_join(shp_55, prop_pa)
 library(units)
 ggplot(pa)+
   geom_boxplot(aes(x=ARCHIP, y = PA_prop), outlier.shape = NA)+
-  geom_point(aes(x=ARCHIP, y = PA_prop, color = ARCHIP), 
+  geom_point(aes(x=ARCHIP, y = PA_prop, color = ARCHIP, size = as.numeric(area)), 
              position ="jitter", size = 3, alpha =.5)

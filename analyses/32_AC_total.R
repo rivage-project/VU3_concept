@@ -98,6 +98,39 @@ ac_agg <- lapply(ac_norm, function(x){
 saveRDS(ac_agg, "data/derived-data/32_AC_tot_BMP_major_isl.rds")
 
 
+# vizualise AC
+ac_agg <- readRDS("data/derived-data/32_AC_tot_BMP_major_isl.rds")
 
+ac <- left_join(
+  ac_agg[["ac_max_min"]],
+  isl_select %>% select(ID, Island_name, Archip, Area, Dist, Elev, SLMP, Lat)
+)
 
+hist(ac$AC_plant)
+hist(ac$AC_mam)
+hist(ac$AC_bird)
 
+ggplot(ac)+
+  geom_point(aes(x=AC_plant,y=AC_mam), color="red", alpha=.5)+
+  geom_point(aes(x=AC_plant,y=AC_bird), color="blue", alpha=.5)+
+  theme_classic()
+
+ggplot(ac)+
+  geom_boxplot(aes(x=Archip, y = AC_plant))+
+  geom_point(aes(x=Archip, y = AC_plant, color = Archip, size = Area), 
+             position = 'jitter', alpha = .5)+
+  theme_classic()
+
+# mammals
+ggplot(ac)+
+  geom_boxplot(aes(x=Archip, y = AC_mam))+
+  geom_point(aes(x=Archip, y = AC_mam, color = Archip, size = Area), 
+             position = 'jitter', alpha = .5)+
+  theme_classic()
+
+# birds
+ggplot(ac)+
+  geom_boxplot(aes(x=Archip, y = AC_bird))+
+  geom_point(aes(x=Archip, y = AC_bird, color = Archip, size = Area), 
+             position = 'jitter', alpha = .5)+
+  theme_classic()

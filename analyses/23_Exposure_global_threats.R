@@ -199,26 +199,58 @@ ggplot(expo)+
 
 # how are the threats related?
 
+#take the same colors as first fig
+archip_col <-  c(
+  "Galapagos Islands" = "#4DAF4A",
+  "Canary Islands" = "#377EB8",
+  "Azores"="#FF7F00", 
+  "Mascarene Islands" = "#984EA3",
+  "Hawaii" = "#E41A1C")
+
 # lu and cc
 lc <- ggplot(expo)+
+  geom_hline(yintercept = .5, lty = 2, color = "grey")+
+  geom_vline(xintercept = .5, lty = 2, color = "grey")+
   geom_point(aes(x=lu, y = cc, size = Area, color = Archip), 
-             position = 'jitter', alpha = .5)+
+             position = 'jitter', alpha = .6)+
+  xlab("Land-use change")+ylab("Climate change")+
+  scale_color_manual(values = archip_col)+
   theme_classic()
 
 # lu and ias
 li <- ggplot(expo)+
+  geom_hline(yintercept = .5, lty = 2, color = "grey")+
+  geom_vline(xintercept = .5, lty = 2, color = "grey")+
   geom_point(aes(x=lu, y = ias, size = Area, color = Archip), 
              position = 'jitter', alpha = .5)+
+  xlab("Land-use change")+ylab("Biological invasions")+
+  scale_color_manual(values = archip_col)+
   theme_classic()
 
 # cc and ias
 ci <- ggplot(expo)+
+  geom_hline(yintercept = .5, lty = 2, color = "grey")+
+  geom_vline(xintercept = .5, lty = 2, color = "grey")+
   geom_point(aes(x=ias, y = cc, size = Area, color = Archip), 
              position = 'jitter', alpha = .5)+
+  xlab("Biological invasions")+ylab("Climate change")+
+  scale_color_manual(values = archip_col)+
   theme_classic()
 
 ggpubr::ggarrange(lc, li, ci, nrow=1, ncol = 3, common.legend = T, legend = "bottom")
 
+pdf("figures/23_Exposure_components.pdf", 6, 6)
+ggpubr::ggarrange(lc, li, ci, nrow=2, ncol = 2, legend = "none")
+dev.off()
+pdf("figures/23_Exposure_components_legend.pdf", 6, 8)
+ggpubr::ggarrange(lc, li, ci, nrow=3, ncol = 1,
+                  common.legend=T, legend = "right")
+dev.off()
+
+
+cor.test(expo$ias, expo$lu)
+cor.test(expo$cc, expo$ias)
+cor.test(expo$cc, expo$lu)
 
 ## all in same plot
 ggplot(expo)+

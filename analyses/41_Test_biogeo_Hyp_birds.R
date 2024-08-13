@@ -8,7 +8,7 @@ library(tidyverse)
 
 
 # select a group and normalization method
-taxon = "bird"
+taxon = "mam"
 norm.method = "max_min"
 vu <- readRDS(paste0("outputs/40_Vulnerability_", taxon, "_", norm.method, ".rds"))
 
@@ -18,7 +18,7 @@ colnames(vu)
 ggplot(vu)+
   geom_histogram(aes(x=Exposure01, fill = Archip), color = "white")
 # two groups: all Galapagos with low exposure values
-# other archip with intermediaate and high values
+# other archip with intermediate and high values
 ggplot(vu)+
   geom_histogram(aes(x=Sensitivity01, fill = Archip), color = "white")
 # two groups of sensitivity:
@@ -26,7 +26,7 @@ ggplot(vu)+
 # - Mascarenes, Galapagos and Hawaii: high sensitivity
 
 ggplot(vu)+
-  geom_histogram(aes(x=AdaptCapacity01), color ="white", fill = "green3", alpha=.5) 
+  geom_histogram(aes(x=AdaptCapacity01, fill = Archip), color ="white") 
 # most values are below 0.5, but rather continuously distributed
 
 
@@ -95,6 +95,7 @@ ggplot(vu)+
 
 aa  <- aov(AdaptCapacity01~Archip, vu)
 anova(aa) # no archipelago effect
+TukeyHSD(aa) 
 
 
 ##### Relationship E, S, AC, VU ~ area ####

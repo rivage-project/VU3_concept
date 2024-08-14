@@ -8,7 +8,7 @@ library(tidyverse)
 
 
 # select a group and normalization method
-taxon = "mam"
+taxon = "bird" # mam, bird, plant
 norm.method = "max_min"
 vu <- readRDS(paste0("outputs/40_Vulnerability_", taxon, "_", norm.method, ".rds"))
 
@@ -36,7 +36,7 @@ ggplot(vu)+
   geom_histogram(aes(x=Vu_sum), color = "white", fill = "blue4", alpha=.5)+
   geom_histogram(aes(x=Vu_prod), color ="white", fill = "green3", alpha=.5) 
   
-# product of components: most Exposure values are low
+# product of components: most VU values are low
 # sum and TOPSIS have different ranges but similar homogeneous distribution
 
 
@@ -124,6 +124,9 @@ ggplot(vu)+
   geom_smooth(aes(x = log(Area), y = Sensitivity01, color = Archip),
               method = "lm")
 # But a slight decrease per archipelago
+mod <- lm(Sensitivity01~log(Area), vu)
+summary(mod)
+
 
 #---------- Adaptive Capacity 
 
@@ -153,7 +156,7 @@ ggplot(vu)+
 mod <- lm(Exposure01~Dist, vu)
 summary(mod)
 # Total E is higher for more distant islands
-# but only small R² , pval = 0.1
+# but only small R² , pval = 0.01
 # => mostly explained by the positive IAS - Dist relationship?
 
 #---------- Sensitivity 
@@ -182,6 +185,7 @@ summary(mod)
 
 ggplot(vu)+
   geom_point(aes(x = Dist, y = Vu_sum, color = Archip))+
+  geom_smooth(aes(x = Dist, y = Vu_sum), method = "lm")+
   theme_classic()
 mod <- lm(Vu_sum~Dist, vu)
 plot(mod)
@@ -225,7 +229,7 @@ summary(mod) # no significant relationship
 
 ggplot(vu)+
   geom_point(aes(x = SLMP, y = Vu_sum, color = Archip))+
-  geom_smooth(aes(x = SLMP, y = Vu_sum), method = "lm")+
+  #geom_smooth(aes(x = SLMP, y = Vu_sum), method = "lm")+
   theme_classic()
 # all pooled
 mod <- lm(Vu_sum~SLMP, vu)
@@ -288,6 +292,9 @@ ggplot(vu)+
 # thus positive correlation between exposure and SR
 ggplot(vu)+
   geom_point(aes(x = Exposure01, y = SR, color = Archip))
+mod <- lm(Exposure01~SR, vu)
+summary(mod)
+
 
 #---------- Sensitivity
 
@@ -299,20 +306,26 @@ ggplot(vu)+
   geom_smooth(aes(x = SR, y = Sensitivity01, color = Archip),
               method = "lm")
 # Sensitivity decreases with SR for Azores
+mod = lm(Sensitivity01~SR, data = vu)
+mod = lm(Sensitivity01~SR*Archip, data = vu)
+summary(mod)
 
 #---------- Adaptive Capacity 
 
 ggplot(vu)+
   geom_point(aes(x = SR, y = AdaptCapacity01, color = Archip))+
-  geom_smooth(aes(x = SR, y = Sensitivity01, color = Archip),
-              method = "lm")
+  geom_smooth(aes(x = SR, y = AdaptCapacity01, color = Archip),
+              method = "lm", se =F)
 # AC decreases with SR for Azores, but overall no obvious pattern
+
+mod = lm(AdaptCapacity01~SR*Archip, data = vu)
+summary(mod)
 
 #----------- Final VU 
 
 ggplot(vu)+
   geom_point(aes(x = SR, y = Vu_sum))
-mod = lm(Vu_sum~SR, data = vu)
+mod = lm(Vu_sum~SR+Archip, data = vu)
 plot(mod)
 summary(mod)
 # no signif relationship between SR and VU, all islands pooled
@@ -321,7 +334,11 @@ summary(mod)
 ggplot(vu)+
   geom_point(aes(x = SR, y = Vu_sum, color = Archip))+
   geom_smooth(aes(x = SR, y = Vu_sum, color = Archip),
-              method = "lm")
+              method = "lm", se = F)
+
+mod = lm(Vu_sum~SR+Archip, data = vu)
+plot(mod)
+summary(mod)
 
 ggplot(vu)+
   geom_smooth(aes(x = SR, y = Vu_sum, color = Archip),

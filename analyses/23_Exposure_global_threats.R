@@ -141,7 +141,7 @@ saveRDS(th_agg, "data/derived-data/23_Exposure_major_isl.rds")
 
 th_agg <- readRDS("data/derived-data/23_Exposure_major_isl.rds")
 
-expo <- th_agg[["th_rank"]]
+expo <- th_agg[["th_log"]]
 expo <- th_agg[["th_max_min"]] # select log, rank, max_min
 
 # check if differences between mam, plants and birds

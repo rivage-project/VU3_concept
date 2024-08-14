@@ -114,6 +114,9 @@ ggplot(vu)+
   theme_classic()
 # Total E is higher for bigger islands, but E is Archip dependant
 
+mod <- lm(Exposure01~log(Area), vu)
+summary(mod)
+
 #---------- Sensitivity 
 
 ggplot(vu)+

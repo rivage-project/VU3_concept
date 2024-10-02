@@ -331,14 +331,18 @@ nrow(distrib_area) == nrow(sp)
 #### Get species level traits from GIFT ####
 
 # Metadata for the trait table
-tra_meta <- GIFT_traits_meta() # from this table we use the column Lvl3 in the next function
+tra_meta <- GIFT::GIFT_traits_meta() # from this table we use the column Lvl3 in the next function
 
 # Retrieving traits (takes >5min)
-# tra <- GIFT_traits(trait_IDs = c(
+# tra <- GIFT::GIFT_traits(trait_IDs = c(
 #   "2.1.1", # life history => lifecyle
 #   "1.1.1", "1.2.1", "1.6.2", # morphology => woodiness, growth form, max height
 #   "3.2.3", "3.7.1","3.7.2","3.3.1"# reproduction => seed mass, flowering time, dispersal syndrome
 #   ))
+# 
+# write.csv2(tra %>% select(-contains("reference")), "data/raw-data/11_GIFT_all_traits.csv", row.names = F)
+# write.csv2(tra_meta, "data/raw-data/11_GIFT_all_traits_METADATA.csv", row.names = F)
+
 # gift_isl_tra <- left_join(distrib_area, tra %>% select(work_ID:trait_value_3.3.1))
 # saveRDS(gift_isl_tra, "data/derived-data/11_GIFT_traits_isl.rds")
 

@@ -80,7 +80,7 @@ ggplot(tp)+
 ggplot(tp)+
   geom_point(aes(x=mean_elev, y=mean_tri, color = ARCHIP),
              size = 3, alpha =.5)
-
+cor.test(tp$mean_elev, tp$mean_tri)
 
 ###### 2. Island conservation potential #####
 

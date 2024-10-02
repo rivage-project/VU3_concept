@@ -152,6 +152,7 @@ sb_norm = list(
   sb_rank = sb_rank
 )
 
+
 #### Sum components to get final sensitivity
 
 # add number of species per isl
@@ -173,9 +174,6 @@ sb_agg <- lapply(sb_norm, function(x){
 
 
 saveRDS(sb_agg, "data/derived-data/13_Sensitivity_bird_major_isl.rds")
-
-
-
 
 ###### Explore sensitivity variations ######
 sm_norm <- readRDS("data/derived-data/13_Sensitivity_mam_major_isl.rds")

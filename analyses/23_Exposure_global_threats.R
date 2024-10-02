@@ -95,6 +95,9 @@ th_norm = list(
   th_rank = th_rank
 )
 
+# save for uncertainties & sensitivity script
+saveRDS(th_norm, "data/derived-data/23_Exposure_components_norm.rds")
+
 #### Sum components to get final exposure
 
 th_agg <- lapply(th_norm, function(x){

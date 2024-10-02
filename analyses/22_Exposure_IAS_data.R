@@ -422,6 +422,7 @@ sp_diff(occ_all, occ_clean_no_flag)
 # how many species in total?
 length(unique(occ_clean_no_flag$speciesKey))
 length(unique(occ_clean_no_flag$taxonKey))
+length(unique(cklist$speciesKey))
 
 
 saveRDS(occ_clean_no_flag, 

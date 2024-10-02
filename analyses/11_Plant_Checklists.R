@@ -13,6 +13,19 @@ gift_isl <- GIFT_checklists(taxon_name = "Tracheophyta",
 gift_isl_metadata <- gift_isl$lists # only metadata per reference
 gift_isl <- gift_isl$checklists # species composition is present in this second object
 
+sp_list <- gift_isl %>%
+  mutate(Status = case_when(
+    native == 1 & naturalized == 0 ~ "native",
+    native == 1 & is.na(naturalized) ~ "native",
+    native == 0 & is.na(naturalized) ~ "non-native",
+    native == 0 & naturalized == 1 ~ "naturalized",
+    native == 0 & naturalized == 0 ~ "non-native",
+    is.na(native) & is.na(naturalized) ~ "unknown")) %>% 
+  filter(Status=="native") %>% 
+  distinct(work_species, work_author, family, tax_group)
+
+write.csv2(sp_list, "data/derived-data/11_Native_plant_list_all_insular.csv", row.names = F)
+
 # Add the names of the reference (archipelagos, etc)
 gift_ref <- GIFT_references()
 gift_isl <- left_join(gift_isl, gift_ref[, c("ref_ID", "geo_entity_ref")],
@@ -212,7 +225,18 @@ sp <- isl_subset %>%
   distinct(work_species) %>%
   separate(work_species, c("genus","epithet"), extra = "merge", fill = "left")
 
+sp_list <- isl_subset %>%
+  mutate(Status = case_when(
+    native == 1 & naturalized == 0 ~ "native",
+    native == 1 & is.na(naturalized) ~ "native",
+    native == 0 & is.na(naturalized) ~ "non-native",
+    native == 0 & naturalized == 1 ~ "naturalized",
+    native == 0 & naturalized == 0 ~ "non-native",
+    is.na(native) & is.na(naturalized) ~ "unknown")) %>% 
+  filter(Status=="native") %>% 
+  distinct(work_species, work_author, family, tax_group)
 
+write.csv2(sp_list, "data/derived-data/11_Native_plant_list_5_archip.csv", row.names = F)
 #colnames(isl_subset)
 #sp <- isl_subset 
 #length(unique(sp %>% pull(work_species)))
@@ -351,6 +375,10 @@ gift_tr <- gift_isl_tra %>%
 
 colnames(gift_tr)
 summary(gift_tr)
+colSums(is.na(gift_tr))/nrow(gift_tr)
+
+mice::md.pattern(gift_tr,rotate.names = T)
+
 
 # get species name for NA
 

@@ -53,6 +53,10 @@ ggplot(isl_nat_tr, aes(y = Island_name))+
   geom_bar(stat = "count")+
   facet_wrap(vars(Archip), scales = "free")
 
+#viridis::magma(7, direction = -1)
+col_na = c("0" = "#FCFDBFFF", "1" = "#FEAF77FF", "2" = "#F1605DFF", 
+           "3" = "#B63679FF", "4" = "#721F81FF", "5" = "#2D1160FF",
+           "6" = "#000004FF")
 
 # Proportion of plants within each Archip
 # select a growth form, default is All
@@ -84,7 +88,7 @@ plot.na.archip <- function(growth_form = "All"){
   # Distribution of species with NA across archipelagos
   p <- ggplot(nb_na_archip, aes(x=Archip, y = prop, fill = nb_NA))+
     geom_bar(stat = "identity")+
-    scale_fill_viridis_d(option = "A" , direction = -1)+
+    scale_fill_manual(values = col_na)+
     geom_text(aes(y = 1.05, label = nb_nat))+
     theme_classic() +
     ggtitle(growth_form)
@@ -97,7 +101,62 @@ tree <- plot.na.archip("tree")
 shrub <- plot.na.archip("shrub")
 herb <- plot.na.archip("herb")
 
-herb
+ggpubr::ggarrange(all, tree, shrub, herb,
+                  nrow = 2, ncol = 2, common.legend = T, legend = "right")
+
+# na pattern for each growth form
+growth_form="tree"
+mice::md.pattern(
+  isl_nat_tr %>% 
+    filter(growthform==growth_form) %>%
+    select(work_species, tot_range:woodiness) %>% distinct(),
+  rotate.names = T)
+colnames(isl_nat_tr)
+
+table(gift_tr$lifecycle, gift_tr$woodiness)
+table(gift_tr$growthform, gift_tr$woodiness)
+table(gift_tr$growthform, gift_tr$lifecycle)
+
+plot(gift_tr$growthform, gift_tr$lifecycle)
+plot(gift_tr$lifecycle, gift_tr$woodiness)
+plot(gift_tr$growthform, gift_tr$woodiness)
+
+
+plot(gift_tr$growthform, gift_tr$max_height)
+
+# Missing Plant max height depending on growth form:
+na_height_arch <- isl_nat_tr %>%
+  distinct(Archip, growthform, work_species, max_height) %>%
+  group_by(Archip, growthform) %>%
+  summarize(na_height = sum(is.na(max_height)),
+            tot_n = n()) %>%
+  mutate(prop = na_height/tot_n)
+
+ggplot(na_height_arch, aes(x=Archip, y = prop, fill = growthform))+
+  geom_bar(stat = "identity", position = position_dodge(.9))+
+  geom_text(aes(y=1, label = tot_n), position = position_dodge(.9))+
+  scale_fill_manual(values = c("herb" = "#31688EFF", "shrub" = "#35B779FF", "tree" = "#FDE725FF"))+
+  theme_bw()+ ylab("Prop. of NA for plant max height")
+position_dodge()
+
+
+# Are NA rate and mean (max_height) correlated?
+
+na_rate_height <- left_join(
+  isl_nat_tr %>%
+    distinct(Archip, work_species, max_height, Island_name) %>%
+    group_by(Archip, Island_name) %>%
+    summarize(na_height = sum(is.na(max_height)),
+              mean_max_height = mean(max_height, na.rm = T)),
+  isl_nat %>% group_by(Island_name) %>% count()
+) %>% mutate(NA_prop = na_height/n)
+
+ggplot(na_rate_height)+
+  geom_point(aes(x=NA_prop, y= mean_max_height, color=Archip))+
+  geom_smooth(aes(x=NA_prop, y= mean_max_height), method = lm)+
+  theme_bw()
+
+cor.test(na_rate_height$NA_prop, na_rate_height$mean_max_height)
 
 # separate by family or taxonomic group?
 length(unique(isl_nat_tr$family))
@@ -140,11 +199,11 @@ order2 <- isl_nat_tr %>%
 
 nb_na_order <- left_join(order2, order_tot) %>%
   mutate(prop = nb_sp/n) %>%
-  mutate(nb_NA=as.factor(nb_NA))
+  mutate(nb_NA=as.character(nb_NA))
 
 ggplot(nb_na_order, aes(x=reorder(Order, -n), y = nb_sp, fill = nb_NA))+
   geom_bar(stat = "identity")+
-  scale_fill_viridis_d(option = "A" , direction = -1)+
+  scale_fill_manual(values = col_na)+
   theme_classic() +
   theme(axis.text.x = element_text(angle = 90))
 
@@ -243,6 +302,5 @@ gift_name <- unique(c(na_disp, na_growth, na_height, na_seed, na_cycle))
 
 
 
-sp_canary <- 
 
 

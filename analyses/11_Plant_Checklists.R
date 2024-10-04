@@ -188,14 +188,28 @@ status_w <- status %>% pivot_wider(names_from = Status, values_from = n) %>%
 
 ggplot(status_w, aes(x=native, y = exotic))+
   geom_point(aes(color = Archip), size = 3)+
-  geom_smooth(method = lm)
+  geom_abline(intercept = 0, slope = 1, lty=2)+
+  geom_smooth(method = lm)+ theme_bw()
 
-cor.test(status_w$exotic,status_w$native)
+status_area <- left_join(status_w, isl_select %>% select(Island_name, Area, Dist, Lat))
+ggplot(status_area, aes(x=native, y = exotic))+
+  geom_point(aes(color = Archip, size = Area))+ theme_bw()
+ggplot(status_area, aes(x=log(Area), y = log(exotic)))+
+  geom_point(aes(color = Archip))+ 
+  geom_smooth(method = lm) +
+  theme_bw()
+
+ggplot(status_area, aes(x=abs(Lat), y = prop_exo))+
+  geom_point(aes(color = Archip))+ 
+  geom_smooth(method = lm) +
+  theme_bw()
+
+cor.test(log(status_area$exotic), log(status_area$Area))
 
 ggplot(status_w, aes(x=Archip, y = prop_exo))+
   geom_boxplot()+
   geom_point(aes(color = Archip), alpha = .5, size = 3, position = "jitter")+
-  geom_hline(yintercept = 1, lty=2)
+  geom_hline(yintercept = 1, lty=2)+ theme_bw()
 
 
 # save island names with GIFT data

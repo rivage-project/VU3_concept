@@ -68,7 +68,6 @@ plot.na.archip <- function(growth_form = "All"){
   } else {
     isl_nat_tr <- left_join(isl_nat, gift_tr)
   }
-  
   archip1 <- isl_nat_tr %>% 
     select(Archip, work_species, family, tax_group, tot_range:nb_NA) %>% 
     distinct() %>%
@@ -100,6 +99,50 @@ all <- plot.na.archip()
 tree <- plot.na.archip("tree")
 shrub <- plot.na.archip("shrub")
 herb <- plot.na.archip("herb")
+
+plot.na.archip.family <- function(fam = "All"){
+  if (fam != "All"){
+    isl_nat_tr <- left_join(isl_nat, gift_tr) %>% 
+      # filter for family here
+      filter(family==fam)
+  } else {
+    isl_nat_tr <- left_join(isl_nat, gift_tr)
+  }
+  
+  archip1 <- isl_nat_tr %>% 
+    select(Archip, work_species, family, tax_group, tot_range:nb_NA) %>% 
+    distinct() %>%
+    group_by(Archip) %>%
+    summarize(nb_nat = n())
+  
+  archip2<- isl_nat_tr %>% 
+    select(Archip, work_species, family, tax_group, tot_range:nb_NA) %>% 
+    distinct() %>%
+    group_by(Archip, nb_NA) %>%
+    summarize(nb_sp = n())
+  
+  nb_na_archip <- left_join(archip2, archip1) %>%
+    mutate(prop = nb_sp/nb_nat) %>%
+    mutate(nb_NA=as.character(nb_NA))
+  
+  # Distribution of species with NA across archipelagos
+  p <- ggplot(nb_na_archip, aes(x=Archip, y = prop, fill = nb_NA))+
+    geom_bar(stat = "identity")+
+    scale_fill_manual(values = col_na)+
+    geom_text(aes(y = 1.05, label = nb_nat))+
+    theme_classic() +
+    ggtitle(family)
+  return(p)
+}
+
+
+all <- plot.na.archip.family()
+palm <- plot.na.archip.family("Aracaceae")
+aster <- plot.na.archip.family("Asteraceae")
+
+all
+palm
+aster
 
 ggpubr::ggarrange(all, tree, shrub, herb,
                   nrow = 2, ncol = 2, common.legend = T, legend = "right")

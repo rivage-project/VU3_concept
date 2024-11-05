@@ -1,17 +1,25 @@
 # create function
 
 exposureFUN <-
-  function(exposure_df, norm_method){
+  function(exposure_df, 
+           norm_method, 
+           weight_lu = 1,
+           weight_cc = 1,
+           weight_ias = 1){
     
     # HM change contains negative values
     # add the minimal value to all values 
     # so relationship between islands is conserved
-    threats$mean_HM_change <- threats$mean_HM_change + abs(min(threats$mean_HM_change))
+    exposure_df$mean_HM_change <- exposure_df$mean_HM_change + abs(min(exposure_df$mean_HM_change))
+    
+    exposure_df <-
+      exposure_df %>% 
+      column_to_rownames("ID")
     
     # Normalize variables
     
     # select major or all islands
-    th_max_min  <- th_log <- th_rank <- x <- threats 
+    th_max_min  <- th_log <- th_rank <- x <- exposure_df 
     
     #------ initialization
     # max min linear
@@ -69,8 +77,10 @@ exposureFUN <-
       
       z <-
         y_norm_ias %>% rownames_to_column("ID") %>% 
-          mutate(ID = as.integer(ID)) %>%
-          mutate(expo = lu + cc + ias)
+        mutate(ID = as.integer(ID)) %>%
+        mutate(expo = weight_lu*lu + 
+                 weight_cc*cc + 
+                 weight_ias*ias)
       
       return(z)
     })
@@ -80,26 +90,6 @@ exposureFUN <-
     if(norm_method == "rank") return(th_agg$th_rank)
     
   }
-
-# load exposure to each threat
-
-ias <- readRDS("data/derived-data/22_IAS_exposure_39_isl.rds")
-cc <- readRDS("data/derived-data/21_CC_SED_exposure_55_isl.rds")
-lu <- readRDS("data/derived-data/20_LU_exposure_55_isl.rds")
-
-# join all threats
-threats <- left_join(
-  lu %>% select(ID, mean_HM_static_2017, mean_HM_change, rdens_osm) %>%
-    mutate(ID = as.integer(ID)),
-  left_join(
-    cc %>% select(ID, sed_tot_med), 
-    ias %>% select(ULM_ID,
-                   nb_alien_bird, 
-                   prop_alien_bird, 
-                   alien_bird_cover) %>%
-      rename(ID=ULM_ID)
-  )
-)
 
 # calculate expo for each normalization method
 expo_max_min <- exposureFUN(threats, norm_method = "max_min")

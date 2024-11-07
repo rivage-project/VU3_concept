@@ -82,3 +82,10 @@ adaptive_capacityFUN <- function(df,
 }
 
 ## load data 
+Data <- readRDS('data_birds_all.rds')
+colnames(Data)
+Adaptive_capacity <- adaptive_capacityFUN(df = Data, 
+                                          traits = c('Hand-Wing.Index', 'Mass'), 
+                                          island_markers = c('mean_elev', 'mean_tpi', ''), 
+                                          norm_method = 'minmax')
+

@@ -277,6 +277,14 @@ adaptive_capacityFUN <- function(df,
   return(outDF)
 }
 
+# norm = "minmax"
+# trait_columns = c("Range.Size", "nb_diet", "nb_hab", "GenLength")
+# traits = c('Hand-Wing.Index', 'Mass')
+# island_markers = c('mean_elev', 'mean_tri', 'PA_prop')
+# summary_method = "sum"
+# n_samples = 1
+# prop_samples = 1
+
 vulnerabilityFUN <-
   function(df, 
            norm = "minmax",
@@ -346,11 +354,25 @@ vulnerabilityFUN <-
         if(summary_method == "prod") out <- compo$Vu_prod
         if(summary_method == "rank_prod") out <- compo$Vu_rank_prod
         
+        results <-
         data.frame(Island_name = df[bootstrap_samples,]$Island_name, 
                    ULM_ID = df[bootstrap_samples,]$ULM_ID, 
                    sci_name_IUCN = df[bootstrap_samples,]$sci_name_IUCN,
                    ARCHIP = df[bootstrap_samples,]$ARCHIP,
-                   vulnerability = out)
+                   VU = out)
+        
+        results_agg <-
+          dplyr::left_join(results,
+                           E, 
+                           by = "ULM_ID") %>% 
+          dplyr::left_join(unique(S[c("sci_name_IUCN", "sensitivity_minmax")]), 
+                           by = "sci_name_IUCN") %>% 
+          dplyr::left_join(AC[c("ULM_ID", "sci_name_IUCN", "adaptive_capacity_minmax")], 
+                           by = c("ULM_ID", "sci_name_IUCN"))
+        
+        names(results_agg)[c(9:11)] <- c("E", "S", "AC")
+        
+        return(results_agg)
         
       })
     
@@ -361,7 +383,7 @@ vulnerabilityFUN <-
                                                         "ARCHIP")), 
            bootstrap_df)
     
-    names(out)[-c(1:4)] <- paste0("vulnerability", 1:(ncol(out)-4))
+    names(out)[-c(1:4)] <- paste0(c("VU_", "lu_", "cc_", "ias_", "E_", "S_", "AC_"), rep(1:n_samples, each = 7))
     
     return(out)
     

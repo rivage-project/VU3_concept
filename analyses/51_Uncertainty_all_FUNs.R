@@ -259,8 +259,6 @@ vulnerabilityFUN <-
         
         S <- S[c("sensitivity_minmax", "sci_name_IUCN")] %>% unique()
         
-        compo <- left_join(E, left_join(S, AC_df)) 
-        
         # 3 different methods for calculating VU: topsis, sum, product
         
         # define positive and negative ideal solution for TOPSIS method
@@ -270,7 +268,10 @@ vulnerabilityFUN <-
           AdaptCapacity = c(1, 0))
         rownames(sol) <- c("pos", "neg")
         
-        compo <- left_join(E, left_join(S, AC_df)) 
+        isl_info <- df[c(1, 2, 28)] %>% unique
+        
+        compo <- left_join(E, left_join(S, AC_df)) %>% 
+          left_join(isl_info)
        
         compo <- compo %>%
           mutate(Exposure01 = expo,
@@ -298,7 +299,9 @@ vulnerabilityFUN <-
         if(summary_method == "rank_prod") out <- compo$Vu_rank_prod
         
         results <-
-          data.frame(ULM_ID = compo$ULM_ID, 
+          data.frame(Island_name = compo$Island_name,
+                     ARCHIP = compo$ARCHIP, 
+                     ULM_ID = compo$ULM_ID, 
                      sci_name_IUCN = compo$sci_name_IUCN,
                      VU = out)
         
@@ -311,7 +314,7 @@ vulnerabilityFUN <-
           dplyr::left_join(AC_df[c("ULM_ID", "sci_name_IUCN", "adaptive_capacity_minmax")], 
                            by = c("ULM_ID", "sci_name_IUCN"))
         
-        names(results_agg)[c(7:9)] <- c("E", "S", "AC")
+        names(results_agg)[c(9:10)] <- c("E", "S", "AC")
         
         return(results_agg)
         
@@ -322,7 +325,7 @@ vulnerabilityFUN <-
                                                           "sci_name_IUCN")), 
              bootstrap_df)
     
-    names(out)[-c(1:2)] <- paste0(c("VU_", "lu_", "cc_", "ias_", "E_", "S_", "AC_"), rep(1:n_samples, each = 7))
+    names(out)[-c(1:4)] <- paste0(c("VU_", "lu_", "cc_", "ias_", "E_", "S_", "AC_"), rep(1:n_samples, each = 7))
     
     return(out)
     

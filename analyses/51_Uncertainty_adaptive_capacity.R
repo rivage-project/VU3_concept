@@ -97,22 +97,34 @@ adaptive_capacityFUN <- function(df,
 Data <- readRDS('data_birds_all.rds')
 colnames(Data)
 Adaptive_capacity <- adaptive_capacityFUN(df = Data, 
-                                          traits = c('Hand-Wing.Index', 'Mass'), 
+                                          traits = c('Hand-Wing.Index'), 
                                           island_markers = c('mean_elev', 'mean_tri', 'PA_prop'), 
                                           norm_method = 'minmax') 
 
 library(ggplot2)
 
+Data_Archi <- read.csv('data/derived-data/01_selected_islands.csv')
+Data_Archi <- Data_Archi %>% 
+  select(ID, Archip, Island_name)
+colnames(Data_Archi)[1] <- 'ULM_ID'
+
+Adaptive_capacity <- left_join(Adaptive_capacity, Data_Archi)
+
 Adaptive_capacity_Means <- Adaptive_capacity %>% 
-  group_by(ULM_ID) %>%
+  group_by(Island_name) %>%
   summarise(Mean=mean(adaptive_capacity_minmax), na.rm=TRUE)
 
-ggplot(Adaptive_capacity, aes(adaptive_capacity_minmax)) +
-  geom_histogram() +
-  facet_wrap(~ULM_ID) + 
-  geom_segment(data=Adaptive_capacity_Means, 
-               aes(x = Mean, xend=Mean, y=0, yend=10), col='darkorange')
-  
+Adaptive_capacity_Medians <- Adaptive_capacity %>% 
+  group_by(Island_name) %>%
+  summarise(Median=median(adaptive_capacity_minmax), na.rm=TRUE)
 
+ggplot(Adaptive_capacity, aes(adaptive_capacity_minmax)) +
+  geom_histogram(aes(fill=Archip, col=Archip)) +
+  facet_wrap(~Island_name) +  
+  geom_segment(data=Adaptive_capacity_Means, 
+                aes(x = Mean, xend=Mean, y=0, yend=10), col='black') +
+  geom_segment(data=Adaptive_capacity_Medians, 
+               aes(x = Median, xend=Median, y=0, yend=10), col='blue') +
+  theme_bw()
 
 

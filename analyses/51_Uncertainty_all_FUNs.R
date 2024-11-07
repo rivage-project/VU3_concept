@@ -97,96 +97,9 @@ exposureFUN <-
     
   }
 
-# 2. Trait normalization ----
-sensitivityFUN <- function(trait_df,
-                           trait_columns,
-                           norm){
-  
-  if(!(norm %in% c("minmax", "logminmax", "rankminmax"))){
-    stop("norm should be one of these three options: 'minmax',
-         'logminmax' or 'rankminmax'.")
-  }
-  
-  # Normalize each marker
-  if(norm == "minmax"){
-    # Min-max normalization
-    trait_df_minmax <- apply(trait_df[, trait_columns], 2, function(x){
-      (x - min(x, na.rm = TRUE))/(max(x, na.rm = TRUE) - min(x, na.rm = TRUE))
-    })
-    colnames(trait_df_minmax) <- paste0(colnames(trait_df_minmax), "_minmax")
-    
-    trait_df_minmax <- as.data.frame(trait_df_minmax)
-    
-    # Calculating the Sensitivity Index
-    trait_df_minmax$sensitivity_minmax <-
-      apply(trait_df_minmax, 1, function(x) sum(x, na.rm = TRUE))
-    
-    # Normalizing the Sensitivity Index
-    trait_df_minmax$sensitivity_minmax_norm <-
-      (trait_df_minmax$sensitivity_minmax -
-         min(trait_df_minmax$sensitivity_minmax, na.rm = TRUE))/
-      (max(trait_df_minmax$sensitivity_minmax, na.rm = TRUE) -
-         min(trait_df_minmax$sensitivity_minmax, na.rm = TRUE))
-    
-    # Binding normalization to the original trait dataset
-    trait_df <- cbind(trait_df, trait_df_minmax)
-    
-  } else if(norm == "logminmax"){
-    # Log minmax normalization
-    trait_df_logminmax <- apply(trait_df[, trait_columns], 2, function(x){
-      (log(x + 1) - min(log(x + 1), na.rm = TRUE))/(max(log(x + 1), na.rm = TRUE) - min(log(x + 1), na.rm = TRUE))
-    })
-    colnames(trait_df_logminmax) <- paste0(colnames(trait_df_logminmax), "_logminmax")
-    
-    trait_df_logminmax <- as.data.frame(trait_df_logminmax)
-    
-    # Calculating the Sensitivity Index
-    trait_df_logminmax$sensitivity_logminmax <-
-      apply(trait_df_logminmax, 1, function(x) sum(x, na.rm = TRUE))
-    
-    # Normalizing the Sensitivity Index
-    trait_df_logminmax$sensitivity_logminmax_norm <-
-      (trait_df_logminmax$sensitivity_logminmax -
-         min(trait_df_logminmax$sensitivity_logminmax, na.rm = TRUE))/
-      (max(trait_df_logminmax$sensitivity_logminmax, na.rm = TRUE) -
-         min(trait_df_logminmax$sensitivity_logminmax, na.rm = TRUE))
-    
-    # Binding normalization to the original trait dataset
-    trait_df <- cbind(trait_df, trait_df_logminmax)
-    
-  } else if(norm == "rankminmax"){
-    # Rank normalization
-    trait_df_rankminmax <- apply(trait_df[, tracol], 2, function(x){
-      (dense_rank(x) - min(dense_rank(x), na.rm = TRUE))/(max(dense_rank(x), na.rm = TRUE) - min(dense_rank(x), na.rm = TRUE))
-    })
-    colnames(trait_df_rankminmax) <- paste0(colnames(trait_df_rankminmax), "_rankminmax")
-    
-    trait_df_rankminmax <- as.data.frame(trait_df_rankminmax)
-    
-    # Calculating the Sensitivity Index
-    trait_df_rankminmax$sensitivity_rankminmax <-
-      apply(trait_df_rankminmax, 1, function(x) sum(x, na.rm = TRUE))
-    
-    # Normalizing the Sensitivity Index
-    trait_df_rankminmax$sensitivity_rankminmax_norm <-
-      (trait_df_rankminmax$sensitivity_rankminmax -
-         min(trait_df_rankminmax$sensitivity_rankminmax, na.rm = TRUE))/
-      (max(trait_df_rankminmax$sensitivity_rankminmax, na.rm = TRUE) -
-         min(trait_df_rankminmax$sensitivity_rankminmax, na.rm = TRUE))
-    
-    # Binding normalization to the original trait dataset
-    trait_df <- cbind(trait_df, trait_df_rankminmax)
-  }
-  
-  
-  return(trait_df)
-}
-
-## function for adaptive capacity 
-# library(dplyr)
-
 normaliseFUN <- function(norm_method, df) {
-  
+  # browser()
+  # Original dataset saved
   df_or <- df
   
   if(any(colnames(df)=='sci_name_IUCN')){
@@ -231,7 +144,35 @@ normaliseFUN <- function(norm_method, df) {
   df <- as.data.frame(df)
   df <- cbind(df_or, df)
   return(df)    
+}
+
+sensitivityFUN <- function(trait_df,
+                           trait_columns,
+                           norm_method){
   
+  if(!(norm_method %in% c("minmax", "logminmax", "rankminmax"))){
+    stop("norm should be one of these three options: 'minmax',
+         'logminmax' or 'rankminmax'.")
+  }
+  # browser()
+  trait_df_norm <- normaliseFUN(norm_method = norm_method,
+                                df = trait_df[, trait_columns])
+  
+  # calculate sensitivity
+  ColsSp <- grep(x = colnames(trait_df_norm),  pattern = norm_method)
+  ColsSp <- colnames(trait_df_norm)[ColsSp]
+  trait_df_norm$sensitivity <- apply(trait_df_norm[, ColsSp], 1,
+                                     function(x) sum(x, na.rm = TRUE))
+  
+  # normalise sensitivity with mix max only
+  outDF <- normaliseFUN(norm_method = 'minmax',
+                        df = trait_df_norm[, 'sensitivity', drop = FALSE])
+  outDF <- cbind(trait_df_norm, outDF[, 'sensitivity_minmax', drop = FALSE])
+  
+  outDF$sci_name_IUCN <-
+    trait_df$sci_name_IUCN
+  
+  return(outDF)
 }
 
 adaptive_capacityFUN <- function(df,
@@ -304,12 +245,21 @@ vulnerabilityFUN <-
         
         E <- exposureFUN(df[bootstrap_samples,], norm)
         S <- sensitivityFUN(df[bootstrap_samples,], trait_columns, norm)
-        AC <- adaptive_capacityFUN(df[bootstrap_samples,], 
-                                   traits = traits,
-                                   island_markers = island_markers,
-                                   norm_method = norm)
+        AC_df <- adaptive_capacityFUN(df[bootstrap_samples,], 
+                                      traits = traits,
+                                      island_markers = island_markers,
+                                      norm_method = norm)
         
-        compo <- left_join(E, left_join(S, AC)) 
+        E$expo <- (E$expo-min(E$expo, na.rm = T))/
+          (max(E$expo, na.rm = T)-min(E$expo, na.rm = T))
+        
+        E <- E[!is.na(E$lu),]
+        E <- E[!is.na(E$cc),]
+        E <- E[!is.na(E$ias),]
+        
+        S <- S[c("sensitivity_minmax", "sci_name_IUCN")] %>% unique()
+        
+        compo <- left_join(E, left_join(S, AC_df)) 
         
         # 3 different methods for calculating VU: topsis, sum, product
         
@@ -320,19 +270,12 @@ vulnerabilityFUN <-
           AdaptCapacity = c(1, 0))
         rownames(sol) <- c("pos", "neg")
         
-        compo <- left_join(E, left_join(S, AC)) 
-        
-        names(compo)[names(compo) == "sensitivity_minmax"] <- "sens"
-        names(compo)[names(compo) == "adaptive_capacity"] <- "AC"
-        
+        compo <- left_join(E, left_join(S, AC_df)) 
+       
         compo <- compo %>%
-          # normalize final components
-          mutate(Exposure01 = (expo-min(compo$expo, na.rm = T))/
-                   (max(compo$expo, na.rm = T)-min(compo$expo, na.rm = T)),
-                 Sensitivity01 = (sens-min(compo$sens, na.rm = T))/
-                   (max(compo$sens, na.rm = T)-min(compo$sens, na.rm = T)),
-                 AdaptCapacity01 = (AC-min(compo$AC, na.rm = T))/
-                   (max(compo$AC, na.rm = T)-min(compo$AC, na.rm = T))) %>%
+          mutate(Exposure01 = expo,
+                 Sensitivity01 = sensitivity_minmax,
+                 AdaptCapacity01 = adaptive_capacity_minmax) %>%
           # Calculate VU = E+S-AC and rank isl 
           mutate(Vu_sum = Exposure01 + Sensitivity01 - AdaptCapacity01) %>%
           mutate(Vu_rank_sum = dense_rank(Vu_sum)) %>%
@@ -355,11 +298,9 @@ vulnerabilityFUN <-
         if(summary_method == "rank_prod") out <- compo$Vu_rank_prod
         
         results <-
-        data.frame(Island_name = df[bootstrap_samples,]$Island_name, 
-                   ULM_ID = df[bootstrap_samples,]$ULM_ID, 
-                   sci_name_IUCN = df[bootstrap_samples,]$sci_name_IUCN,
-                   ARCHIP = df[bootstrap_samples,]$ARCHIP,
-                   VU = out)
+          data.frame(ULM_ID = compo$ULM_ID, 
+                     sci_name_IUCN = compo$sci_name_IUCN,
+                     VU = out)
         
         results_agg <-
           dplyr::left_join(results,
@@ -367,23 +308,21 @@ vulnerabilityFUN <-
                            by = "ULM_ID") %>% 
           dplyr::left_join(unique(S[c("sci_name_IUCN", "sensitivity_minmax")]), 
                            by = "sci_name_IUCN") %>% 
-          dplyr::left_join(AC[c("ULM_ID", "sci_name_IUCN", "adaptive_capacity_minmax")], 
+          dplyr::left_join(AC_df[c("ULM_ID", "sci_name_IUCN", "adaptive_capacity_minmax")], 
                            by = c("ULM_ID", "sci_name_IUCN"))
         
-        names(results_agg)[c(9:11)] <- c("E", "S", "AC")
+        names(results_agg)[c(7:9)] <- c("E", "S", "AC")
         
         return(results_agg)
         
       })
     
     out <-
-    Reduce(function(dtf1,dtf2) left_join(dtf1,dtf2,by=c("Island_name", 
-                                                        "ULM_ID", 
-                                                        "sci_name_IUCN", 
-                                                        "ARCHIP")), 
-           bootstrap_df)
+      Reduce(function(dtf1,dtf2) left_join(dtf1,dtf2,by=c("ULM_ID", 
+                                                          "sci_name_IUCN")), 
+             bootstrap_df)
     
-    names(out)[-c(1:4)] <- paste0(c("VU_", "lu_", "cc_", "ias_", "E_", "S_", "AC_"), rep(1:n_samples, each = 7))
+    names(out)[-c(1:2)] <- paste0(c("VU_", "lu_", "cc_", "ias_", "E_", "S_", "AC_"), rep(1:n_samples, each = 7))
     
     return(out)
     

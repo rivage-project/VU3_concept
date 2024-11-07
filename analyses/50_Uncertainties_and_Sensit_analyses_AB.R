@@ -34,6 +34,7 @@ corrplot(M_rank, method = "number") #
 
 # several variables correlated, options:
 # do a pca with variables within each component and use the scores as a measure of exposure.
+# check Iago's script (ends in _IF), he did the pca and kept the PC1 of LU and of IAS.
 # remove one correlated variable from each pair and rerun analyses with a simpler dataset
 # correlated variables: 
 # lu: keep road density and mean_hm_change

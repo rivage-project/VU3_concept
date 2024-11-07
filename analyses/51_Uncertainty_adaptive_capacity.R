@@ -141,6 +141,9 @@ my_boot <- function(x, times=5000) {
   # Bootstrap 95% CI
   Sample <- sample(x, replace=TRUE, size = times)
   cis = quantile(Sample, probs=c(0.025,0.975))
+  browser()
+  cis = sd(Sample)
+  
   
   # Return data frame of results
   data.frame(var, lower.ci=cis[1], upper.ci=cis[2])

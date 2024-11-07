@@ -70,7 +70,16 @@ sensitivityFUN <- function(trait_df,
 
     trait_df_norm <- normaliseFUN(norm_method = norm_method,
                                 df = trait_df[, trait_columns])
+    
+    trait_df_norm[, grep(pattern='Range.Size', x = colnames(trait_df_norm))] <- 
+      1-trait_df_norm[, grep(pattern='Range.Size', x = colnames(trait_df_norm))]
   
+    trait_df_norm[, grep(pattern='nb_hab', x = colnames(trait_df_norm))] <- 
+      1-trait_df_norm[, grep(pattern='nb_hab', x = colnames(trait_df_norm))]
+    
+    trait_df_norm[, grep(pattern='nb_diet', x = colnames(trait_df_norm))] <- 
+      1-trait_df_norm[, grep(pattern='nb_diet', x = colnames(trait_df_norm))]
+    
   # calculate sensitivity
   ColsSp <- grep(x = colnames(trait_df_norm),  pattern = norm_method)
   ColsSp <- colnames(trait_df_norm)[ColsSp]
@@ -144,10 +153,13 @@ my_boot <- function(x, times=5000) {
   
   # Bootstrap 95% CI
   Sample <- sample(x, replace=TRUE, size = times)
-  cis = quantile(Sample, probs=c(0.025,0.975))
+  #cis = quantile(Sample, probs=c(0.025,0.975))
+  SD = sd(Sample)
   
   # Return data frame of results
-  data.frame(lower.ci=cis[1], upper.ci=cis[2])
+  #data.frame(lower.ci=cis[1], upper.ci=cis[2])
+  data.frame(SD)
+  
 }
 
 sensitivity_CIs <-
@@ -166,8 +178,8 @@ sensitivity_CIs$Island_name <- factor(sensitivity_CIs$Island_name,
 library(RColorBrewer)
 
 ggplot(sensitivity_CIs, aes(x=Median,
-                                  xmin=lower.ci,
-                                  xmax=upper.ci,
+                                  xmin=Median+SD,
+                                  xmax=Median-SD,
                                   y=Island_name,
                                   fill=Archip, 
                                   col=Archip)) +
@@ -175,7 +187,7 @@ ggplot(sensitivity_CIs, aes(x=Median,
   geom_errorbar() +
   theme_bw() +
   ggtitle('Sensitivity') +
-  xlab('median \u00B1 95% bootstrap quantiles') +
+  xlab('median \u00B1 95% bootstrap sd') +
   scale_color_manual("Archipelago",
                      values = c("Azores" = brewer.pal(n = 5, name = "Set1")[5],
                                 "Canary Islands" = brewer.pal(n = 5, name = "Set1")[2],

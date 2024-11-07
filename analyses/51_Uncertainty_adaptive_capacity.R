@@ -2,7 +2,7 @@
 library(dplyr)
 
 normaliseFUN <- function(norm_method, df) {
-
+  
   df_or <- df
   
   if(any(colnames(df)=='sci_name_IUCN')){
@@ -78,7 +78,7 @@ adaptive_capacityFUN <- function(df,
   ColsIsl <- grep(x = colnames(df_islands_norm),  pattern = norm_method)
   ColsIsl <- colnames(df_islands_norm)[ColsIsl]
   
-    df <- dplyr::full_join(df_species_norm[, c('ULM_ID', 'sci_name_IUCN', ColsSp)], 
+  df <- dplyr::full_join(df_species_norm[, c('ULM_ID', 'sci_name_IUCN', ColsSp)], 
                          df_islands_norm[, c('ULM_ID', ColsIsl)],
                          by='ULM_ID')
   
@@ -125,7 +125,7 @@ ggplot(Adaptive_capacity, aes(adaptive_capacity_minmax)) +
   geom_histogram(aes(fill=Archip, col=Archip)) +
   facet_wrap(~Island_name) +  
   geom_segment(data=Adaptive_capacity_Means, 
-                aes(x = Mean, xend=Mean, y=0, yend=10), col='black') +
+               aes(x = Mean, xend=Mean, y=0, yend=10), col='black') +
   geom_segment(data=Adaptive_capacity_Medians, 
                aes(x = Median, xend=Median, y=0, yend=10), col='blue') +
   theme_bw()
@@ -155,21 +155,36 @@ Adaptive_capacity_CIs <-
 Adaptive_capacity_CIs <- left_join(Adaptive_capacity, Adaptive_capacity_CIs)
 Adaptive_capacityOrder <- Adaptive_capacity_CIs[order(Adaptive_capacity_CIs$Median),]
 Adaptive_capacity_CIs$Island_name <- factor(Adaptive_capacity_CIs$Island_name, 
-                                        levels=unique(Adaptive_capacityOrder$Island_name))
-  
+                                            levels=unique(Adaptive_capacityOrder$Island_name))
+
+
+library(RColorBrewer)
 
 ggplot(Adaptive_capacity_CIs, aes(x=Median,
                                   xmin=lower.ci,
                                   xmax=upper.ci,
-                                   y=Island_name,
-                                   fill=Archip, 
-                                   col=Archip)) +
+                                  y=Island_name,
+                                  fill=Archip, 
+                                  col=Archip)) +
   geom_point() +
   geom_errorbar() +
   theme_bw() +
   ggtitle('Adaptive capacity') +
-  xlab('median \u00B1 95% bootstrap CI')
-  
+  xlab('median \u00B1 95% bootstrap quantiles') +
+  scale_color_manual("Archipelago",
+                     values = c("Azores" = brewer.pal(n = 5, name = "Set1")[5],
+                                "Canary Islands" = brewer.pal(n = 5, name = "Set1")[2],
+                                "Galapagos Islands" = brewer.pal(n = 5, name = "Set1")[3],
+                                "Hawaii" = brewer.pal(n = 5, name = "Set1")[1],
+                                "Mascarene Islands" = brewer.pal(n = 5, name = "Set1")[4])) +
+  scale_fill_manual("Archipelago",
+                    values = c("Azores" = brewer.pal(n = 5, name = "Set1")[5],
+                               "Canary Islands" = brewer.pal(n = 5, name = "Set1")[2],
+                               "Galapagos Islands" = brewer.pal(n = 5, name = "Set1")[3],
+                               "Hawaii" = brewer.pal(n = 5, name = "Set1")[1],
+                               "Mascarene Islands" = brewer.pal(n = 5, name = "Set1")[4])) +
+  theme(legend.position = "bottom") +
+  ylab('Island name')
 
 
 

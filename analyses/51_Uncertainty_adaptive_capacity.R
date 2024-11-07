@@ -1,9 +1,19 @@
 ## function for adaptive capacity 
-
+library(dplyr)
 
 normaliseFUN <- function(norm_method, df) {
-  
+
   df_or <- df
+  
+  if(any(colnames(df)=='sci_name_IUCN')){
+    df <- df %>% 
+      select(-sci_name_IUCN)
+  }
+  
+  if(any(colnames(df)=='ULM_ID')){
+    df <- df %>% 
+      select(-ULM_ID)
+  }
   
   if(!(norm_method %in% c("minmax", "logminmax", "rankminmax"))){
     stop("norm_method should be one of these three options: 'minmax',
@@ -17,14 +27,14 @@ normaliseFUN <- function(norm_method, df) {
     })
   }
   
-  if(norm == "logminmax"){
+  if(norm_method == "logminmax"){
     # Log minmax normalization
     df <- apply(df, 2, function(x){
       (log(x + 1) - min(log(x + 1), na.rm = TRUE))/(max(log(x + 1), na.rm = TRUE) - min(log(x + 1), na.rm = TRUE))
     })
   }
   
-  if(norm == "rankminmax"){
+  if(norm_method == "rankminmax"){
     # Rank normalization
     df <- apply(df, 2, function(x){
       (dense_rank(x) - min(dense_rank(x), na.rm = TRUE))/(max(dense_rank(x), na.rm = TRUE) - min(dense_rank(x), na.rm = TRUE))
@@ -55,7 +65,7 @@ adaptive_capacityFUN <- function(df,
   ## add the markers to obtain AC
   ## nornalise the AC
   
-  df_species <- unique(df[, c('sci_name_IUCN', traits)])
+  df_species <- unique(df[, c('ULM_ID', 'sci_name_IUCN', traits)])
   df_islands <- unique(df[, c('ULM_ID', island_markers)])
   
   # Normalize each trait
@@ -64,9 +74,11 @@ adaptive_capacityFUN <- function(df,
   
   # bind data together
   ColsSp <- grep(x = colnames(df_species_norm),  pattern = norm_method)
+  ColsSp <- colnames(df_species_norm)[ColsSp]
   ColsIsl <- grep(x = colnames(df_islands_norm),  pattern = norm_method)
-
-  df <- dplyr::full_join(df_species[, c('ULM_ID', 'sci_name_IUCN', ColsSp)], 
+  ColsIsl <- colnames(df_islands_norm)[ColsIsl]
+  
+    df <- dplyr::full_join(df_species_norm[, c('ULM_ID', 'sci_name_IUCN', ColsSp)], 
                          df_islands_norm[, c('ULM_ID', ColsIsl)],
                          by='ULM_ID')
   
@@ -76,9 +88,9 @@ adaptive_capacityFUN <- function(df,
   
   # normalise adaptive capacity with mix max only
   outDF <- normaliseFUN(norm_method = 'minmax', df = df[, 'adaptive_capacity', drop=FALSE])
-  outDF <- cbind(df, outDF[, 'adaptive_capacity_norm', drop=FALSE])
+  outDF <- cbind(df, outDF[, 'adaptive_capacity_minmax', drop=FALSE])
   
-  return(df)
+  return(outDF)
 }
 
 ## load data 
@@ -86,6 +98,21 @@ Data <- readRDS('data_birds_all.rds')
 colnames(Data)
 Adaptive_capacity <- adaptive_capacityFUN(df = Data, 
                                           traits = c('Hand-Wing.Index', 'Mass'), 
-                                          island_markers = c('mean_elev', 'mean_tpi', ''), 
-                                          norm_method = 'minmax')
+                                          island_markers = c('mean_elev', 'mean_tri', 'PA_prop'), 
+                                          norm_method = 'minmax') 
+
+library(ggplot2)
+
+Adaptive_capacity_Means <- Adaptive_capacity %>% 
+  group_by(ULM_ID) %>%
+  summarise(Mean=mean(adaptive_capacity_minmax), na.rm=TRUE)
+
+ggplot(Adaptive_capacity, aes(adaptive_capacity_minmax)) +
+  geom_histogram() +
+  facet_wrap(~ULM_ID) + 
+  geom_segment(data=Adaptive_capacity_Means, 
+               aes(x = Mean, xend=Mean, y=0, yend=10), col='darkorange')
+  
+
+
 

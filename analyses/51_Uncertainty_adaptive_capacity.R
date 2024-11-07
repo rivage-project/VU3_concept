@@ -57,7 +57,7 @@ adaptive_capacityFUN <- function(df,
   
   
   
-  ## traits are HWI and body mass
+  ## traits are HWI and body mass (body mass JUST FOR MAMMALS)
   ## exposure markers are island elevation, topographic heterogeneity, % protected area
   
   #### steps
@@ -112,11 +112,14 @@ Adaptive_capacity <- left_join(Adaptive_capacity, Data_Archi)
 
 Adaptive_capacity_Means <- Adaptive_capacity %>% 
   group_by(Island_name) %>%
-  summarise(Mean=mean(adaptive_capacity_minmax), na.rm=TRUE)
+  summarise(Mean=mean(adaptive_capacity_minmax, na.rm=TRUE))
 
 Adaptive_capacity_Medians <- Adaptive_capacity %>% 
   group_by(Island_name) %>%
-  summarise(Median=median(adaptive_capacity_minmax), na.rm=TRUE)
+  summarise(Median=median(adaptive_capacity_minmax, , na.rm=TRUE))
+
+## calculating CI from bootstrapping
+library(boot)
 
 ggplot(Adaptive_capacity, aes(adaptive_capacity_minmax)) +
   geom_histogram(aes(fill=Archip, col=Archip)) +
@@ -126,5 +129,47 @@ ggplot(Adaptive_capacity, aes(adaptive_capacity_minmax)) +
   geom_segment(data=Adaptive_capacity_Medians, 
                aes(x = Median, xend=Median, y=0, yend=10), col='blue') +
   theme_bw()
+
+
+## plotting medians and CI from bootstrapping
+my_boot <- function(x, times=5000) {
+  
+  # Get column name from input object
+  var = deparse(substitute(x))
+  var = gsub("^\\.\\$","", var)
+  
+  # Bootstrap 95% CI
+  Sample <- sample(x, replace=TRUE, size = times)
+  cis = quantile(Sample, probs=c(0.025,0.975))
+  
+  # Return data frame of results
+  data.frame(var, lower.ci=cis[1], upper.ci=cis[2])
+}
+
+Adaptive_capacity_CIs <-
+  Adaptive_capacity %>% 
+  group_by(Island_name) %>%
+  do(my_boot(.$adaptive_capacity_minmax))
+
+
+Adaptive_capacity_CIs <- left_join(Adaptive_capacity, Adaptive_capacity_CIs)
+Adaptive_capacityOrder <- Adaptive_capacity_CIs[order(Adaptive_capacity_CIs$Median),]
+Adaptive_capacity_CIs$Island_name <- factor(Adaptive_capacity_CIs$Island_name, 
+                                        levels=unique(Adaptive_capacityOrder$Island_name))
+  
+
+ggplot(Adaptive_capacity_CIs, aes(x=Median,
+                                  xmin=lower.ci,
+                                  xmax=upper.ci,
+                                   y=Island_name,
+                                   fill=Archip, 
+                                   col=Archip)) +
+  geom_point() +
+  geom_errorbar() +
+  theme_bw() +
+  ggtitle('Adaptive capacity') +
+  xlab('median \u00B1 95% bootstrap CI')
+  
+
 
 

@@ -577,7 +577,11 @@ plants <- readRDS("data/derived-data/11_nb_native_alien_plants.rds") %>%
          prop_alien_plant = prop_exo) %>%
   select(Island_name, nb_alien_plant, prop_alien_plant)
 plants_ok <- left_join(plants, isl2 %>% select(ULM_ID, Island_name))
-# alien birds and mammals
+
+# alien birds and mammals -----
+
+df_alien_range <- readRDS("data/derived-data/22_df_alien_range_BM.rds")
+ias_archip_group <- readRDS( "data/derived-data/22_ias_archip_group_BM.rds")
 bm <- ias_archip_group %>%
   group_by(ULM_ID, ARCHIP, ISLAND, class) %>%
   summarize(nb_alien = n())%>%
@@ -594,10 +598,8 @@ bm_cover <- left_join(bm, df_alien_range) %>%
          alien_bird_cover = occ_cells_bird/island_cells)
 
 # bind plants and vertebrates
-expo_ias <- left_join(bm_cover, plants_ok) %>% 
-  ungroup() %>% 
-  select(-c(ARCHIP, ISLAND, Archip, Island_name))
-
+expo_ias <- bm_cover
+  
 
 # add native SR for vertebrates 
 # load native checklists

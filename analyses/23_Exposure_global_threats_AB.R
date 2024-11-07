@@ -19,7 +19,7 @@ threats <- left_join(
     mutate(ID = as.integer(ID)),
   left_join(
     cc %>% select(ID, sed_tot_med), 
-    ias %>% select(ULM_ID, nb_alien_plant, prop_alien_plant,
+    ias %>% select(ULM_ID,
                    nb_alien_bird, prop_alien_bird, alien_bird_cover,
                    nb_alien_mam, prop_alien_mam, alien_mam_cover) %>%
       rename(ID=ULM_ID)
@@ -59,15 +59,18 @@ threats_minor <- threats %>%
 # Normalize variables
 
 # select major or all islands
+threats_major <- threats_major[complete.cases(threats_major$prop_alien_bird), ]
+threats_major <- threats_major %>% select(-c(ARCHIP, ISLAND))
 th_max_min  <- th_log <- th_rank <- x <- threats_major 
+
 
 #------ initialization
 # max min linear
 maxcol <- apply(x, 2, max, na.rm=T)
 mincol <- apply(x, 2, min, na.rm=T)
 # log transformed
-maxlog <- apply(x, 2, function(x){max(log(x+1), na.rm = T)})
-minlog <- apply(x, 2, function(x){min(log(x+1), na.rm = T)})
+# maxlog <- apply(x, 2, function(x){max(log(x+1), na.rm = T)})
+# minlog <- apply(x, 2, function(x){min(log(x+1), na.rm = T)})
 # ranks
 x_rank <- x %>%
   dplyr::mutate_all(dense_rank)
@@ -79,19 +82,19 @@ for (i in 1:length(maxcol)){
   # max min
   th_max_min[,i] <- (x[,i]-mincol[i])/(maxcol[i]-mincol[i])
   # log-transformed
-  th_log[,i] <- ((log(x[,i]+1)-minlog[i]))/
-    (maxlog[i]-minlog[i])
-  # ranks
+  # th_log[,i] <- ((log(x[,i]+1)-minlog[i]))/
+  #   (maxlog[i]-minlog[i])
+  # # ranks
   th_rank[,i] <- (x_rank[,i]-minrank[i])/(maxrank[i]-minrank[i])
 }
 
 summary(th_max_min)
-summary(th_log)
+# summary(th_log)
 summary(th_rank)
 
 th_norm = list(
   th_max_min = th_max_min,
-  th_log=th_log,
+  # th_log=th_log,
   th_rank = th_rank
 )
 
@@ -106,9 +109,8 @@ th_agg <- lapply(th_norm, function(x){
     mutate(lu = mean_HM_change+mean_HM_static_2017+rdens_osm,
            cc = sed_tot_med,
            ias_bird = nb_alien_bird + prop_alien_bird + alien_bird_cover,
-           ias_mam = nb_alien_mam + prop_alien_mam + alien_mam_cover,
-           ias_plant = nb_alien_plant + prop_alien_plant) %>%
-    select(lu, cc, ias_bird, ias_mam, ias_plant)
+           ias_mam = nb_alien_mam + prop_alien_mam + alien_mam_cover) %>%
+    select(lu, cc, ias_bird, ias_mam)
   
   # normalize lu, ias, and cc to sum for final exposure
   maxcol <- apply(y, 2, max, na.rm=T)
@@ -119,7 +121,7 @@ th_agg <- lapply(th_norm, function(x){
   }
   # get final ias = ias plant + ias mam + ias b?
   y_norm_ias <- y_norm %>% 
-    mutate(ias = ias_bird+ias_mam+ias_plant)
+    mutate(ias = ias_bird+ias_mam)
   a=y_norm_ias
   maxa = max(a$ias, na.rm = T)
   mina = min(a$ias, na.rm = T)
@@ -130,7 +132,6 @@ th_agg <- lapply(th_norm, function(x){
       mutate(ID = as.integer(ID)) %>%
       mutate(expo_b =  lu + cc + ias_bird,
              expo_m = lu + cc + ias_mam,
-             expo_p = lu + cc + ias_plant,
              expo = lu + cc + ias), 
     isl_select %>% select(ID, Island_name, Archip, Area, Dist, Elev, SLMP, Lat))
   return(z)
@@ -150,9 +151,9 @@ expo <- th_agg[["th_max_min"]] # select log, rank, max_min
 
 # check if differences between mam, plants and birds
 plot(expo$expo_b, expo$expo_m)
-plot(expo$expo_b, expo$expo_p)
-plot(expo$expo_m, expo$expo_p)
-# correlated but notable differences
+# plot(expo$expo_b, expo$expo_p)
+# plot(expo$expo_m, expo$expo_p)
+# # correlated but notable differences
 
 
 hist(expo$expo_b)

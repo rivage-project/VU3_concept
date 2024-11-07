@@ -9,23 +9,23 @@ library(car)
 ####### Exposure #########
 
 # load threat data (normalized)
-th_norm <- readRDS("data/derived-data/23_Exposure_components_norm.rds")
+th_norm <- readRDS("data/derived-data/23_Exposure_components_norm_AB.rds")
 isl_select <- read.csv("data/derived-data/01_selected_islands.csv")
 
 # remove NA for each standardization dataframe
-th_norm$th_max_min <- th_norm[[1]][complete.cases(th_norm$th_max_min$prop_alien_plant),]
+# th_norm$th_max_min <- th_norm[[1]][complete.cases(th_norm$th_max_min$prop_alien_plant),]
 th_norm$th_max_min <- th_norm[[1]][complete.cases(th_norm$th_max_min$prop_alien_bird),]
 
-th_norm$th_log <- th_norm[[1]][complete.cases(th_norm$th_log$prop_alien_plant),]
+# th_norm$th_log <- th_norm[[1]][complete.cases(th_norm$th_log$prop_alien_plant),]
 th_norm$th_log <- th_norm[[1]][complete.cases(th_norm$th_log$prop_alien_bird),]
 
-th_norm$th_rank <- th_norm[[1]][complete.cases(th_norm$th_max_min$prop_alien_plant),]
+# th_norm$th_rank <- th_norm[[1]][complete.cases(th_norm$th_max_min$prop_alien_plant),]
 th_norm$th_rank <- th_norm[[1]][complete.cases(th_norm$th_max_min$prop_alien_bird),]
 
 #check potential collinearity
 library(corrplot)
 M_max_min <- cor(th_norm$th_max_min)
-M_log <- cor(th_norm$th_log)
+# M_log <- cor(th_norm$th_log)
 M_rank <- cor(th_norm$th_rank)
 
 corrplot(M_max_min, method = "number") #

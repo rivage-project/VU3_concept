@@ -208,3 +208,15 @@ ggplot(sens_b)+
              position = 'jitter', alpha = .5)+
   theme_classic()
 
+
+###### Checklist on major islands
+
+
+mam2 <- left_join(mam %>% select(ULM_ID, sci_name, kingdom:genus) %>% rename(ID = ULM_ID), 
+                  isl_select %>% select(ID, Island_name, Archip))
+bird2 <- left_join(birds %>% rename(ID = ULM_ID), 
+                   isl_select %>% select(ID, Island_name, Archip))
+
+
+write.csv2(bird2, "data/derived-data/13_Checklist_BIRDS.csv", row.names = F)
+write.csv2(mam2, "data/derived-data/13_Checklist_MAMMALS.csv", row.names = F)

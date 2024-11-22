@@ -562,7 +562,8 @@ for (i in 1:length(out)){
   }
 }
 
-
+saveRDS(df_alien_range, "data/derived-data/22_df_alien_range_BM.rds")
+saveRDS(ias_archip_group, "data/derived-data/22_ias_archip_group_BM.rds")
 
 #############
 
@@ -577,7 +578,11 @@ plants <- readRDS("data/derived-data/11_nb_native_alien_plants.rds") %>%
          prop_alien_plant = prop_exo) %>%
   select(Island_name, nb_alien_plant, prop_alien_plant)
 plants_ok <- left_join(plants, isl2 %>% select(ULM_ID, Island_name))
+
 # alien birds and mammals
+df_alien_range <- readRDS("data/derived-data/22_df_alien_range_BM.rds")
+ias_archip_group <- readRDS( "data/derived-data/22_ias_archip_group_BM.rds")
+
 bm <- ias_archip_group %>%
   group_by(ULM_ID, ARCHIP, ISLAND, class) %>%
   summarize(nb_alien = n())%>%

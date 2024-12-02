@@ -48,7 +48,7 @@ create_df_birds <-
                        by = "ULM_ID",
                        relationship = "many-to-many")
     
-    return(data_birds_all)
+    return(data_birds_all[complete.cases(data_birds_all),])
     
   }
 

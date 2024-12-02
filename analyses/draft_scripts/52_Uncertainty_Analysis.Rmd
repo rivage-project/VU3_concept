@@ -131,7 +131,7 @@ ggplot(VU_birds_boot_summary, aes(x=median_VU,
   geom_errorbar() +
   theme_bw() +
   ggtitle('Sensitivity') +
-  xlab('median \u00B1 95% bootstrap sd') +
+  xlab('median \u00B1 95% CI') +
   scale_color_manual("Archipelago",
                      values = c("Azores" = brewer.pal(n = 5, name = "Set1")[5],
                                 "Canary Islands" = brewer.pal(n = 5, name = "Set1")[2],

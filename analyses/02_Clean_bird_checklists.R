@@ -48,7 +48,7 @@ for(f in file_names){ # Loop on each bird file
  
   # open bird file
   bshp <- readRDS(f)
-  bshp <- bshp %>%
+  bshp <- bshp |>
     # keep only native resident and breeding birds
     dplyr::filter(presence %in% c(1:3) & origin %in% c(1:2) & seasonal %in% c(1:2))
   
@@ -61,30 +61,29 @@ for(f in file_names){ # Loop on each bird file
   names(inter) <- isl$ID
   
   for (i in 1:length(inter)){
-    b <- bshp[inter[[i]],] %>% sf::st_drop_geometry()
+    b <- bshp[inter[[i]],] |> sf::st_drop_geometry()
     if(nrow(b)>0){
       b$file <- gsub("data/derived-data/", "", f)
       b$ULM_ID <- isl$ID[i]
-      bird_ckl <- bind_rows(bird_ckl,b)
+      bird_ckl <- dplyr::bind_rows(bird_ckl,b)
     }
   }
 
 }
 
 bird_ckl_ABC <- readRDS("data/derived-data/02_bird_ckl_45_isl_ABC.rds")
-bird_ckl_ABCD <- bind_rows(bird_ckl_ABC, bird_ckl)
+bird_ckl_ABCD <- dplyr::bind_rows(bird_ckl_ABC, bird_ckl)
 saveRDS(bird_ckl_ABCD, "data/derived-data/02_bird_ckl_45_isl_ABCD.rds")
 
 
 ###### Check the data #####
 
 bird_ckl_ABCD <- readRDS("data/derived-data/02_bird_ckl_45_isl_ABCD.rds")
-library(tidyverse)
 
-SR <- bird_ckl_ABCD %>%
-  distinct(sci_name, ULM_ID) %>%
-  group_by(ULM_ID) %>%
-  summarise(SR = n())
+SR <- bird_ckl_ABCD |>
+  dplyr::distinct(sci_name, ULM_ID) |>
+  dplyr::group_by(ULM_ID) |>
+  dplyr::summarise(SR = dplyr::n())
 
 
 # check if all species are extant
@@ -93,9 +92,9 @@ SR <- bird_ckl_ABCD %>%
 path="Z:/THESE/5_Data/IUCN_summary/MAJ_2023_06/"
 bnp <- read.csv(paste0(path, "birds_nonpasserif/simple_summary.csv"))
 bp <- read.csv(paste0(path, "birds_passerif/simple_summary.csv"))
-cate <- bind_rows(bnp, bp) %>% select(scientificName, redlistCategory)
+cate <- dplyr::bind_rows(bnp, bp) |> dplyr::select(scientificName, redlistCategory)
 
-sp_list <- left_join(bird_ckl_ABCD %>% distinct(sci_name) %>% rename(scientificName=sci_name),
+sp_list <- dplyr::left_join(bird_ckl_ABCD |> dplyr::distinct(sci_name) |> dplyr::rename(scientificName=sci_name),
                      cate)
 table(sp_list$redlistCategory)
 
@@ -107,9 +106,9 @@ length(unique(bird_ckl_ABCD$sci_name))
 #### Compare with previous data
 
 ckl_before <- readRDS("data/derived-data/12_bird_ckl_islands_clean.RDS")
-sp_before <- ckl_before %>%
-  group_by(ULM_ID, Island_name)%>%
-  summarise(SR_before =n()) 
+sp_before <- ckl_before |>
+  dplyr::group_by(ULM_ID, Island_name)|>
+  dplyr::summarise(SR_before = dplyr::n()) 
 
 length(unique(ckl_before$sci_name_IUCN))
 # 219 species before
@@ -117,48 +116,51 @@ length(unique(ckl_before$sci_name_IUCN))
 
 
 # How did richness change?
-compa <- left_join(SR, sp_before)
+compa <- dplyr::left_join(SR, sp_before)
 
+library(ggplot2)
 ggplot(compa)+
   geom_point(aes(x=SR_before, y = SR))
 # more species on most islands, more homogeneous between islands
 
 
 # check with françois azores
-ckl_az <- bird_ckl_ABCD %>% filter(ULM_ID %in% (isl %>% filter(Archip == "Azores") %>% pull(ID)))
+ckl_az <- bird_ckl_ABCD |> dplyr::filter(ULM_ID %in% (isl |> dplyr::filter(Archip == "Azores") |> dplyr::pull(ID)))
 
 length(unique(ckl_az$sci_name))
 # with Birdlife: 35 species, and 304 occurrences
 
-ckl_az_bef <- ckl_before %>% filter(ULM_ID %in% (isl %>% filter(Archip == "Azores") %>% pull(ID)))
+ckl_az_bef <- ckl_before |> dplyr::filter(ULM_ID %in% (isl |> dplyr::filter(Archip == "Azores") |> dplyr::pull(ID)))
 
 length(unique(ckl_az_bef$sci_name_IUCN))
 # before: 27 species, and 174 occurrences
 
-compa_id <- full_join(bird_ckl_ABCD %>% dplyr::distinct(sci_name, ULM_ID, yrmodified),
-                      ckl_before %>% rename(sci_name = sci_name_IUCN))
+compa_id <- dplyr::full_join(bird_ckl_ABCD |> dplyr::distinct(sci_name, ULM_ID, yrmodified),
+                      ckl_before |> dplyr::rename(sci_name = sci_name_IUCN))
 
 
 
-can_ckl <- left_join(bird_ckl_ABCD %>% dplyr::distinct(sci_name, ULM_ID) %>% rename(ID=ULM_ID),
-                     isl %>% sf::st_drop_geometry()) %>%
-  filter(Archip == "Canary Islands")
+can_ckl <- dplyr::left_join(bird_ckl_ABCD |> 
+                              dplyr::distinct(sci_name, ULM_ID) |> 
+                              dplyr::rename(ID=ULM_ID),
+                     isl |> sf::st_drop_geometry()) |>
+  dplyr::filter(Archip == "Canary Islands")
 
 
 table(can_ckl$Island)
 
 
-compa_can <- full_join(can_ckl, 
-                       ckl_before %>% 
-                         filter(ULM_ID %in% can_ckl$ID) %>% 
-                         mutate(control = 1) %>%
-                         rename(sci_name = sci_name_IUCN,
+compa_can <- dplyr::full_join(can_ckl, 
+                       ckl_before |> 
+                         dplyr::filter(ULM_ID %in% can_ckl$ID) |> 
+                         dplyr::mutate(control = 1) |>
+                         dplyr::rename(sci_name = sci_name_IUCN,
                                 ID = ULM_ID))
 
 
-compa_can <- compa_can %>% 
-  mutate(From_database=if_else(is.na(Country), "Litterature_only", "In_both")) %>%
-  mutate(From_database=if_else(is.na(control), "Birdlife_only", From_database))
+compa_can <- compa_can |> 
+  dplyr::mutate(From_database=dplyr::if_else(is.na(Country), "Litterature_only", "In_both")) |>
+  dplyr::mutate(From_database=dplyr::if_else(is.na(control), "Birdlife_only", From_database))
 
 openxlsx::write.xlsx(compa_can, "data/derived-data/02_bird_checklist_canary_issue.xlsx")
 
@@ -175,23 +177,92 @@ openxlsx::write.xlsx(compa_can, "data/derived-data/02_bird_checklist_canary_issu
 # confirmed by several sources, and then to go manually through all species "Litterature only" 
 # or "Birdlife only" and check if I should confirm their presence or not. 
 
-new_ckl <- left_join(bird_ckl_ABCD %>% dplyr::distinct(sci_name, ULM_ID) %>% rename(ID=ULM_ID),
-                     isl %>% sf::st_drop_geometry())
+new_ckl <- dplyr::left_join(
+  bird_ckl_ABCD |> dplyr::distinct(sci_name, ULM_ID) |> dplyr::rename(ID=ULM_ID),
+  isl |> sf::st_drop_geometry())
 
 
 table(new_ckl$Island)
+length(unique(new_ckl$sci_name))
 
 
-compa_all <- full_join(new_ckl, 
-                       ckl_before %>% 
-                         mutate(control = 1) %>%
-                         rename(sci_name = sci_name_IUCN,
-                                ID = ULM_ID)) %>%
-  mutate(From_database=if_else(is.na(Country), "Litterature_only", "In_both")) %>%
-  mutate(From_database=if_else(is.na(control), "Birdlife_only", From_database))
+table(ckl_before$Island)
+length(unique(ckl_before$sci_name_IUCN))
+length(unique(ckl_before$ULM_ID))
+
+
+compa_all <- dplyr::full_join(new_ckl, 
+                       ckl_before |> 
+                         dplyr::mutate(control = 1) |>
+                         dplyr::rename(sci_name = sci_name_IUCN,
+                                ID = ULM_ID)) |>
+  dplyr::mutate(From_database=dplyr::if_else(is.na(Country), "Litterature_only", "In_both")) |>
+  dplyr::mutate(From_database=dplyr::if_else(is.na(control), "Birdlife_only", From_database))
 
 
 table(compa_all$From_database)
 
 openxlsx::write.xlsx(compa_all, "data/derived-data/02_bird_checklist_6_archip_issue.xlsx")
+
+
+
+# open manual file
+# to get the precise insular list for JM (Canary)
+all <- openxlsx::read.xlsx("data/derived-data/02_bird_checklist_6_archip_issue_manual.xlsx")
+
+can <- all |> dplyr::filter(Archip=="Canary Islands" & Keep ==1) |>
+  dplyr::distinct(sci_name, Archip, is_syno)
+
+openxlsx::write.xlsx(can, "data/derived-data/02_bird_list_canary_ordered.xlsx")
+
+
+
+############# Clean checklist after manual cleaning ################
+
+rm(list=ls())
+
+# Load selected island shapefiles
+isl <- readRDS("data/derived-data/01_shp_45_major_isl.rds")
+
+# read xlsx file
+
+bckl <- openxlsx::read.xlsx("data/derived-data/02_bird_checklist_6_archip_issue_manual.xlsx") 
+
+colSums(is.na(bckl))
+
+bckl_clean <- bckl |>
+  dplyr::filter(Keep == 1) |>
+  dplyr::mutate(Island = dplyr::if_else(is.na(Island), Island_name, Island)) |>
+  dplyr::filter(Island != "Isla Seymour") |> 
+  dplyr::distinct(Archip, Island, sci_name, is_syno)
+
+length(unique(bckl_clean$sci_name))
+# 240 bird species, 1247 occurrences
+
+colSums(is.na(bckl_clean))
+
+table(bckl$Archip)
+
+
+sr <- bckl_clean |>
+  dplyr::select(Archip, Island, sci_name) |>
+  dplyr::group_by(Archip, Island) |>
+  dplyr::summarise(SR_current = dplyr::n())
+
+ckl_before <- readRDS("data/derived-data/12_bird_ckl_islands_clean.RDS")
+sp_before <- ckl_before |>
+  dplyr::group_by(ULM_ID, Island_name)|>
+  dplyr::summarise(SR_before = dplyr::n()) |>
+  dplyr::rename(Island = Island_name)
+
+compa <- dplyr::left_join(sr, sp_before)
+
+ggplot(compa, aes(x = SR_before, y = SR_current, color = Archip))+
+  geom_point()
+# better after the cleaning!
+
+# save clean checklist
+
+saveRDS(bckl_clean, "data/derived-data/02_bird_ckl_45_isl.rds")
+
 

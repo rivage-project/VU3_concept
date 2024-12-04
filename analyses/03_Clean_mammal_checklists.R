@@ -1,5 +1,4 @@
 rm(list=ls())
-library(tidyverse)
 
 ##### MAMMALS ####
 
@@ -16,9 +15,9 @@ isl <- readRDS("data/derived-data/01_shp_45_major_isl.rds")
 mam <- sf::st_read("data/raw-data/IUCN_RANGE/MAMMALS.shp")
 # colnames(mam)
 # summary(mam)
-mam <- mam %>%
-  dplyr::filter(presence %in% c(1:3) & origin %in% c(1:2) & seasonal %in% c(1:3)) %>%
-  dplyr::filter(terrestria=="true") %>%
+mam <- mam |>
+  dplyr::filter(presence %in% c(1:3) & origin %in% c(1:2) & seasonal %in% c(1:3)) |>
+  dplyr::filter(terrestria=="true") |>
   sf::st_make_valid()
 
 mam_valid <- mam[sf::st_is_valid(mam),]
@@ -28,16 +27,16 @@ names(inter) <- isl$ULM_ID
 
 mam_ckl <- data.frame()
 for (i in 1:length(inter)){
-  m <- mam_valid[inter[[i]],] %>% sf::st_drop_geometry()
+  m <- mam_valid[inter[[i]],] |> sf::st_drop_geometry()
   if(nrow(m)>0){
     m$ULM_ID <- isl$ID[i]
-    mam_ckl <- bind_rows(mam_ckl,m)
+    mam_ckl <- dplyr::bind_rows(mam_ckl,m)
   }
 }
 saveRDS(mam_ckl, "data/derived-data/03_mammals_inter_45_isl.rds")
 
 mam_ckl <- readRDS("data/derived-data/03_mammals_inter_45_isl.rds")
-unique(mam_ckl %>% dplyr::pull(sci_name))
+unique(mam_ckl |> dplyr::pull(sci_name))
 
 # remove Lontra canadensis from Hawaii?
 
@@ -52,15 +51,16 @@ azo_mam <- openxlsx::read.xlsx("data/raw-data/Azores_All_Mammals_Birds_names_ok.
 # Canary islands (data for official national checklist 2012 - JMFP)
 can_m <- openxlsx::read.xlsx("data/raw-data/Canarias_Mammals_Birds.xlsx", sheet = "mammals")
 
-mam_ckl %>% filter(sci_name %in% can_m$Species) %>% distinct(sci_name) %>% pull(sci_name)
+mam_ckl |> dplyr::filter(sci_name %in% can_m$Species) |> 
+  dplyr::distinct(sci_name) |> dplyr::pull(sci_name)
 # ok all species ar in both databases
 
 # mascarenes
 # check with wikipedia page for mammals of mauritius + LR => all consistent
 
 # galapagos
-sort(mam_ckl %>% filter(ULM_ID %in% c(9883:9993, 85138)) %>% 
-       distinct(sci_name) %>% pull(sci_name))
+sort(mam_ckl |> dplyr::filter(ULM_ID %in% c(9883:9993, 85138)) |> 
+       dplyr::distinct(sci_name) |> dplyr::pull(sci_name))
 # most species listed in the wikipedia page are extinct...
 # so data are consistent with our db
 
@@ -69,8 +69,9 @@ sort(mam_ckl %>% filter(ULM_ID %in% c(9883:9993, 85138)) %>%
 # ok!
 
 # final checklist
-mam_ckl_clean <- mam_ckl %>%
-  filter(!sci_name %in% c("Lontra canadensis","Rattus norvegicus"))
+mam_ckl_clean <- mam_ckl |>
+  dplyr::filter(!sci_name %in% c("Lontra canadensis","Rattus norvegicus"))
+
 saveRDS(mam_ckl_clean, "data/derived-data/03_mammal_ckl_45_isl.rds")
 
 length(unique(mam_ckl_clean$sci_name))

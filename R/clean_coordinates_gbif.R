@@ -4,14 +4,14 @@
 
 # clean coordinates, basic cleaning, no function applied
 clean_coord_base <- function(gbif_occ){
-  clean_occ <- gbif_occ %>% 
-    filter(basisOfRecord %in% c("HUMAN_OBSERVATION", "MACHINE_OBSERVATION",
-                                "OBSERVATION", "OCCURRENCE")) %>%
-    filter(occurrenceStatus == "PRESENT")  %>%
-    filter(decimalLatitude!= "" | decimalLongitude!= "") %>%
-    mutate(LAT = as.numeric(decimalLatitude),
-           LONG = as.numeric(decimalLongitude)) %>%
-    filter(!(is.na(LAT)|is.na(LONG))) %>%
+  clean_occ <- gbif_occ |> 
+    dplyr::filter(basisOfRecord %in% c("HUMAN_OBSERVATION", "MACHINE_OBSERVATION",
+                                "OBSERVATION", "OCCURRENCE")) |>
+    dplyr::filter(occurrenceStatus == "PRESENT")  |>
+    dplyr::filter(decimalLatitude!= "" | decimalLongitude!= "") |>
+    dplyr::mutate(LAT = as.numeric(decimalLatitude),
+           LONG = as.numeric(decimalLongitude)) |>
+    dplyr::filter(!(is.na(LAT)|is.na(LONG))) |>
     dplyr::select(taxonKey, speciesKey, species, 
                   LAT, LONG, coordinateUncertaintyInMeters,
                   countryCode, year, establishmentMeans)
@@ -62,8 +62,8 @@ occ_to_spatial_point <- function(clean_occ){
   names(occ_sp_list) <- sort(unique(clean_occ$speciesKey))
   
   for(sp in names(occ_sp_list)){
-    WGScoor <-  clean_occ %>%
-      filter(speciesKey == sp)
+    WGScoor <-  clean_occ |>
+      dplyr::filter(speciesKey == sp)
     coordinates(WGScoor)=~LONG+LAT
     proj4string(WGScoor)<- CRS("+proj=longlat +datum=WGS84")
     occ_sp_list[[sp]] <- WGScoor

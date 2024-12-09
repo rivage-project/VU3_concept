@@ -444,15 +444,39 @@ for(i in 1:length(inter)){
 ias_archip <- dplyr::left_join(
   out_df, 
   isl |> sf::st_drop_geometry() |> dplyr::select(ID, Archip, Island)) |>
-  dplyr::distinct(speciesKey, species, ID, Archip, Island) #|>
+  dplyr::distinct(speciesKey, species, ID, Archip, Island)
   # dplyr::mutate(ISLAND = if_else(ISLAND == "El Hierro","Isla de El Hierro", ISLAND)) |>
   # dplyr::mutate(ISLAND = if_else(ISLAND == "La Gomera","Isla de La Gomera", ISLAND))
 
-# get the class of each species (birds and mammals)
-cklist <- readRDS("data/derived-data/alien_occ/22_list_alien_birds_mam_6_archip.rds")
-ias_archip_group <- dplyr::left_join(ias_archip, cklist |> dplyr::distinct(speciesKey, class))
-mammals <- cklist |> dplyr::filter(class=="Mammalia") |> dplyr::pull(speciesKey) 
-birds <- cklist |> dplyr::filter(class=="Aves") |> dplyr::pull(speciesKey) 
+# add island from Tristan da Cunha
+# because no occurrence with GBIF on this archipelago
+# but still some species occurring => double check with TIB and DIISE databases
+distrib <- readr::read_tsv("data/raw-data/alien_species/tristan/distribution.txt")
+profile <- readr::read_tsv("data/raw-data/alien_species/tristan/speciesprofile.txt")
+taxon <- readr::read_tsv("data/raw-data/alien_species/tristan/taxon.txt")
+tdc <- dplyr::left_join(distrib, dplyr::left_join(profile, taxon))
+
+ias_tdc <- tdc |> dplyr::filter(class %in% c("Aves", "Mammalia") & establishmentMeans =="Alien") |> 
+  dplyr::distinct(locality, scientificName) |>
+  # in TIB & DIISE => eradication of S. scrofa + C. hircus + F. catus on TdC
+  # eradication of S. scrofa on Inaccessible
+  dplyr::filter(locality =="Tristan da Cunha")|>
+  dplyr::filter(!scientificName %in% c("Felis catus Linnaeus, 1758", "Sus scrofa Linnaeus, 1758")) |>
+  dplyr::mutate(speciesKey = 0,
+                species = stringr::word(scientificName, 1,2),
+                Archip = "Tristan da Cunha Islands",
+                ID = 7733) |>
+  dplyr::rename(Island = locality) |> dplyr::select(-scientificName) |>
+  dplyr::mutate(species = dplyr::if_else(species=="Canis familiaris","Canis lupus", species))
+
+ias_archip_all <- dplyr::bind_rows(ias_archip, ias_tdc)
+table(ias_archip_all$Archip)
+length(unique(ias_archip_all$Island))
+length(unique(ias_archip_all$speciesKey)) # because some zero but not useful
+length(unique(ias_archip_all$species))
+test <- ias_archip_all |> dplyr::distinct(species, speciesKey)
+
+saveRDS(ias_archip_all, "data/derived-data/22_ias_6_archip_BM_ckl.rds")
 
 
 # for each island with occ
@@ -468,11 +492,6 @@ for (i in 1:length(out)){
     # transform points and polygons to Mollweide projection
     # for having an equal-area cell grid
     occ <- sf::st_transform(out[[i]], crs = "+proj=moll")
-    # filter mam and birds to get separate cover values
-    mam <- occ |> dplyr::filter(speciesKey %in% mammals)
-    bird <- occ |> dplyr::filter(speciesKey %in% birds)
-    # nrow(occ)==nrow(mam)+nrow(bird)
-    
     isl_temp <- sf::st_transform(isl |> dplyr::filter(ID==unique(occ$ID)), crs = "+proj=moll")
     grid <- sf::st_make_grid(isl_temp, c(1000, 1000), what = "polygons", square = T)
     grid_sf = sf::st_sf(grid) |>
@@ -481,9 +500,7 @@ for (i in 1:length(out)){
     df <- data.frame(
       ID = isl_temp$ID,
       island_cells = length(sf::st_intersects(isl_temp, grid_sf)[[1]]),
-      occ_cells_tot = length(unique(unlist(sf::st_intersects(occ, grid_sf)))),
-      occ_cells_mam = length(unique(unlist(sf::st_intersects(mam, grid_sf)))),
-      occ_cells_bird = length(unique(unlist(sf::st_intersects(bird, grid_sf))))
+      occ_cells_tot = length(unique(unlist(sf::st_intersects(occ, grid_sf))))
     )
     
     df_alien_range <- dplyr::bind_rows(df_alien_range, df)
@@ -496,48 +513,31 @@ saveRDS(df_alien_range, "data/derived-data/22_df_alien_range_BM.rds")
 #############
 
 # Create a database with IAS info for each island
-# - nb of alien plants + prop alien plants
-# - nb of alien  birds + mammals & prop of alien birds/mam/vert
-# - % of 1km² cells with at least one alien bird/mammal occurrence
-
+# - nb of alien vertebrates & prop of alien vertebrates compared to native sp
+# - % of 1km² cells with at least one alien vertebrate occurrence
 
 df_alien_range <- readRDS("data/derived-data/22_df_alien_range_BM.rds")
-ias_archip_group <- readRDS( "data/derived-data/22_ias_archip_group_BM.rds")
-bm <- ias_archip_group |>
-  group_by(ULM_ID, ARCHIP, ISLAND, class) |>
-  summarize(nb_alien = n())|>
-  pivot_wider(names_from = class,
-              values_from = nb_alien,
-              values_fill = 0) |>
-  mutate(nb_alien_vert = Mammalia+Aves) |>
-  rename(nb_alien_mam = Mammalia,
-         nb_alien_bird = Aves)
-# get alien range cover
-bm_cover <- left_join(bm, df_alien_range) |>
-  mutate(alien_vert_cover = occ_cells_tot/island_cells,
-         alien_mam_cover = occ_cells_mam/island_cells,
-         alien_bird_cover = occ_cells_bird/island_cells)
+ias_archip <- readRDS( "data/derived-data/22_ias_6_archip_BM_ckl.rds")
 
-# bind plants and vertebrates
-expo_ias <- bm_cover
-  
+bm <- ias_archip |>
+  dplyr::select(-speciesKey) |> dplyr::distinct() |>
+  dplyr::group_by(ID, Archip, Island) |>
+  dplyr::summarize(nb_alien = dplyr::n())
+# get alien range cover for final exposure to IAS
+bm_cover <- dplyr::left_join(bm, df_alien_range) |>
+  dplyr::mutate(island_cells = ifelse(ID==7733, 98, island_cells),
+                occ_cells_tot = ifelse(ID==7733, 1, occ_cells_tot)) |>
+  dplyr::mutate(alien_vert_cover = occ_cells_tot/island_cells)
 
-# add native SR for vertebrates 
-# load native checklists
-birds <- readRDS("data/derived-data/12_bird_ckl_islands_clean.RDS")
-mam <- readRDS("data/derived-data/10_mammals_inter_isl_clean.RDS")
-# calculate SR
-sr_m <- mam |> group_by(ULM_ID) |> summarise(SR_mam = n()) 
-sr_b <- birds |> group_by(ULM_ID) |> summarise(SR_bird = n()) 
+expo_ias <- dplyr::left_join(
+  isl |> sf::st_drop_geometry() |> dplyr::select(ID, Island),
+  bm_cover |> dplyr::ungroup() |> dplyr::select(ID, nb_alien:alien_vert_cover) 
+)
 
-colnames(expo_ias)
-expo_ias <- left_join(left_join(expo_ias, sr_m), sr_b) |>
-  mutate(prop_alien_mam = nb_alien_mam/SR_mam+nb_alien_mam,
-         prop_alien_bird = nb_alien_bird/SR_bird+nb_alien_mam)
-colnames(expo_ias)
+expo_ias[is.na(expo_ias)] <- 0
 
 # save final dataset
-saveRDS(expo_ias, "data/derived-data/22_IAS_exposure_39_isl.rds")
+saveRDS(expo_ias, "data/derived-data/22_IAS_exposure_45_isl.rds")
 
 #############
 

@@ -1,12 +1,12 @@
 # Exposure to global threats
 rm(list = ls())
 
-library(tidyverse)
 
 # load exposure to each threat
-ias <- readRDS("data/derived-data/")
+ias <- readRDS("data/derived-data/22_IAS_exposure_45_isl.rds")
 cc <- readRDS("data/derived-data/21_CC_SED_exposure_45_isl.rds")
-lu <- readRDS("data/derived-data/20_LU_exposure_45_isl.rds")
+lu <- readRDS("data/derived-data/20_LU_exposure_45_isl.rds")|>
+  dplyr::mutate(ID = as.integer(ID))
 
 
 # select variables and create a list with all threats
@@ -14,17 +14,13 @@ colnames(ias)
 colnames(lu)
 colnames(cc)
 
-threats <- left_join(
-  lu %>% select(ID, mean_HM_change, rdens_osm) %>%
-    mutate(ID = as.integer(ID)),
-  left_join(
-    cc %>% select(ID, sed_tas_isl_med, sed_pr_isl_med, sed_tot_med), 
-    ias %>% select(ULM_ID, nb_alien_plant, prop_alien_plant,
-                   nb_alien_bird, prop_alien_bird, alien_bird_cover,
-                   nb_alien_mam, prop_alien_mam, alien_mam_cover) %>%
-      rename(ID=ULM_ID)
+threats <- dplyr::left_join(
+  lu |> dplyr::select(ID, mean_HM_change, rdens_osm),
+  dplyr::left_join(
+    cc |> dplyr::select(ID, sed_tas_isl_med, sed_pr_isl_med, sed_tot_med), 
+    ias |> dplyr::select(ID, nb_alien, alien_vert_cover)
     )
-) %>% column_to_rownames("ID")
+) |> textshape::column_to_rownames("ID")
 
 summary(threats)
 
@@ -34,20 +30,18 @@ summary(threats)
 threats$mean_HM_change <- threats$mean_HM_change + abs(min(threats$mean_HM_change))
 summary(threats)
 
-# Select
+# Get islands
 isl <- readRDS("data/derived-data/01_shp_45_major_isl.rds")
 unique(isl$Archip)
-
-
-threats_major <- threats %>%
-  rownames_to_column("ID") %>%
-  filter(!ID %in% isl_select$ID[isl_select$Island_name %in% minor_islands]) %>%
-  column_to_rownames("ID")
+isl_tbl <- dplyr::left_join(
+  isl |> sf::st_as_sf() |> sf::st_drop_geometry() |> 
+    dplyr::select(ID, Island, Archip), 
+  lu |> dplyr::select(ID, Area_km2))
+  
 
 # Normalize variables
 
-# select major or all islands
-th_max_min  <- th_log <- th_rank <- x <- threats_major 
+th_max_min  <- th_log <- th_rank <- x <- threats 
 
 #------ initialization
 # max min linear
@@ -57,8 +51,8 @@ mincol <- apply(x, 2, min, na.rm=T)
 maxlog <- apply(x, 2, function(x){max(log(x+1), na.rm = T)})
 minlog <- apply(x, 2, function(x){min(log(x+1), na.rm = T)})
 # ranks
-x_rank <- x %>%
-  dplyr::mutate_all(dense_rank)
+x_rank <- x |>
+  dplyr::mutate_all(dplyr::dense_rank)
 maxrank <- apply(x_rank, 2, max, na.rm=T)
 minrank <- apply(x_rank, 2, min, na.rm=T)
 
@@ -84,18 +78,16 @@ th_norm = list(
 )
 
 # save for uncertainties & sensitivity script
-saveRDS(th_norm, "data/derived-data/23_Exposure_components_norm.rds")
+saveRDS(th_norm, "data/derived-data/23_Exposure_components_norm_45_isl.rds")
 
 #### Sum components to get final exposure
 
 th_agg <- lapply(th_norm, function(x){
-  y <- x %>%
-    mutate(lu = mean_HM_change+mean_HM_static_2017+rdens_osm,
+  y <- x |>
+    dplyr::mutate(lu = mean_HM_change+rdens_osm,
            cc = sed_tot_med,
-           ias_bird = nb_alien_bird + prop_alien_bird + alien_bird_cover,
-           ias_mam = nb_alien_mam + prop_alien_mam + alien_mam_cover,
-           ias_plant = nb_alien_plant + prop_alien_plant) %>%
-    select(lu, cc, ias_bird, ias_mam, ias_plant)
+           ias = alien_vert_cover + nb_alien) |>
+    dplyr::select(lu, cc, ias)
   
   # normalize lu, ias, and cc to sum for final exposure
   maxcol <- apply(y, 2, max, na.rm=T)
@@ -104,37 +96,28 @@ th_agg <- lapply(th_norm, function(x){
   for (i in 1:length(maxcol)){
     y_norm[,i] <- (y[,i]-mincol[i])/(maxcol[i]-mincol[i])
   }
-  # get final ias = ias plant + ias mam + ias b?
-  y_norm_ias <- y_norm %>% 
-    mutate(ias = ias_bird+ias_mam+ias_plant)
-  a=y_norm_ias
-  maxa = max(a$ias, na.rm = T)
-  mina = min(a$ias, na.rm = T)
-  y_norm_ias$ias = (a$ias-mina)/(maxa-mina)
   
-  z <- left_join(
-    y_norm_ias %>% rownames_to_column("ID") %>% 
-      mutate(ID = as.integer(ID)) %>%
-      mutate(expo_b =  lu + cc + ias_bird,
-             expo_m = lu + cc + ias_mam,
-             expo_p = lu + cc + ias_plant,
-             expo = lu + cc + ias), 
-    isl_select %>% select(ID, Island_name, Archip, Area, Dist, Elev, SLMP, Lat))
+  z <- dplyr::left_join(
+    y_norm |> tibble::rownames_to_column("ID") |> 
+      dplyr::mutate(ID = as.integer(ID)) |>
+      dplyr::mutate(expo = lu + cc + ias), 
+    isl_tbl)
   return(z)
 })
 
 
-saveRDS(th_agg, "data/derived-data/23_Exposure_major_isl.rds")
+saveRDS(th_agg, "data/derived-data/23_Exposure_45_isl.rds")
 
 
 
 ################
 
-th_agg <- readRDS("data/derived-data/23_Exposure_major_isl.rds")
+th_agg <- readRDS("data/derived-data/23_Exposure_45_isl.rds")
 
 expo <- th_agg[["th_max_min"]] # select log, rank, max_min
 
 
+RColorBrewer::brewer.pal(12, "Paired")
 
 #take the same colors as first fig
 archip_col <-  c(
@@ -142,13 +125,16 @@ archip_col <-  c(
   "Canary Islands" = "#377EB8",
   "Azores"="#FF7F00", 
   "Mascarene Islands" = "#984EA3",
-  "Hawaii" = "#E41A1C")
+  "Hawaii" = "#E41A1C",
+  "Tristan da Cunha Islands" = "#B15928")
+
+library(ggplot2)
 
 # lu and cc
 lc <- ggplot(expo)+
   geom_hline(yintercept = .5, lty = 2, color = "grey")+
   geom_vline(xintercept = .5, lty = 2, color = "grey")+
-  geom_point(aes(x=lu, y = cc, size = Area, color = Archip), 
+  geom_point(aes(x=lu, y = cc, size = Area_km2, color = Archip), 
              position = 'jitter', alpha = .6)+
   xlab("Land-use change")+ylab("Climate change")+
   scale_color_manual(values = archip_col)+
@@ -158,7 +144,7 @@ lc <- ggplot(expo)+
 li <- ggplot(expo)+
   geom_hline(yintercept = .5, lty = 2, color = "grey")+
   geom_vline(xintercept = .5, lty = 2, color = "grey")+
-  geom_point(aes(x=lu, y = ias, size = Area, color = Archip), 
+  geom_point(aes(x=lu, y = ias, size = Area_km2, color = Archip), 
              position = 'jitter', alpha = .5)+
   xlab("Land-use change")+ylab("Biological invasions")+
   scale_color_manual(values = archip_col)+
@@ -168,7 +154,7 @@ li <- ggplot(expo)+
 ci <- ggplot(expo)+
   geom_hline(yintercept = .5, lty = 2, color = "grey")+
   geom_vline(xintercept = .5, lty = 2, color = "grey")+
-  geom_point(aes(x=ias, y = cc, size = Area, color = Archip), 
+  geom_point(aes(x=ias, y = cc, size = Area_km2, color = Archip), 
              position = 'jitter', alpha = .5)+
   xlab("Biological invasions")+ylab("Climate change")+
   scale_color_manual(values = archip_col)+

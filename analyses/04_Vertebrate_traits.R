@@ -118,9 +118,38 @@ setdiff(mam_all, aoh_m_list$BINOMIAL)
 # (Pteropus rodricensis, including synonymous species Pteropus mascarinus)
 # and does not work for seals...
 
+# Lumbierres et al. 2022 README in data
+# advise to take the range for species without AoH model
+# We thus attribute a prevalence value of 1 
+# to get AOH size, we multiply the IUCN range with AoH model prevalence
+
+# open mam range
+mam_range <- sf::st_read("data/raw-data/IUCN_RANGE/MAMMALS.shp")
+
+# Union of polygons by species, calculate range area for each sp
+mam_range_calc <- mam_range |> dplyr::filter(sci_name %in% mam_all) |> 
+  dplyr::filter(presence %in% c(1:3) & origin %in% c(1:2) & seasonal %in% c(1:3)) |> 
+  dplyr::filter(terrestria=="true") |>
+  dplyr::group_by(sci_name) |>
+  dplyr::summarize(geometry = sf::st_union(geometry)) |>
+  dplyr::mutate(IUCN_range_km2 = round(units::set_units(sf::st_area(geometry), km^2), 2)) |>
+  sf::st_drop_geometry()
+
+traits_m_all_aoh <- dplyr::left_join(
+  traits_m_all,
+  dplyr::left_join(
+    mam_range_calc |> dplyr::rename(scientificName = sci_name) |> units::drop_units(), 
+    aoh_m |> dplyr::select(BINOMIAL, Model_prevalence)|> dplyr::rename(scientificName = BINOMIAL)))
+
+colSums(is.na(traits_m_all_aoh))
+
+traits_m_all_aoh[is.na(traits_m_all_aoh)] <-1
+traits_m_all_aoh$AoH_range_km2 <- traits_m_all_aoh$IUCN_range_km2*traits_m_all_aoh$Model_prevalence
+
+plot(traits_m_all_aoh$IUCN_range_km2, traits_m_all_aoh$AoH_range_km2)
 
 # save trait data
-saveRDS(traits_m_all, "data/derived-data/04_Mammal_traits.RDS")
+saveRDS(traits_m_all_aoh, "data/derived-data/04_Mammal_traits.RDS")
 
 
 
@@ -218,14 +247,8 @@ db_syno <- dplyr::left_join(
 db_all <- dplyr::bind_rows(db, db_syno)
 
 setdiff(unique(hb_avo_birds$scientificName), unique(db_all$scientificName))
-# 5 species without correspondance, check manually
-#"Gallinula galeata" = "Gallinula chloropus"
-# Nesoenas picturatus = Nesoenas picturata
-# Alaudala rufescens = Calandrella rufescens
-# Cyanistes teneriffae = Parus teneriffae
-# Zosterops mauritianus = same diet breadth as Zosterops borbonicus
-# Puffinus bailloni = Puffinus lherminieri
-# elton_db |> filter(Scientific=="Parus teneriffae")
+# 15 species without correspondance, check manually
+
 corresp <- c("Gallinula galeata" = "Gallinula chloropus",
              "Alaudala rufescens" = "Calandrella rufescens",
              "Fringilla polatzeki" = "Fringilla teydea",
@@ -259,7 +282,50 @@ traits_b_all <- dplyr::left_join(
 
 
 
-#AoH 
+# AoH  
+
+# Get IUCN range size (long task, do only when necessary)
+
+# Load bird file names
+# file_names <- list.files("data/derived-data/", pattern = "02_valid", full.names = T)
+# bird_range_calc <- data.frame()
+# for(f in file_names){ # Loop on each bird file (takes ~30min)
+#   # open bird file
+#   bshp <- readRDS(f)
+#   bird_range_calc_temp <- bshp |>
+#     dplyr::filter(sci_name %in% all_b) |>
+#     # keep only native resident and breeding birds
+#     dplyr::filter(presence %in% c(1:3) & origin %in% c(1:2) & seasonal %in% c(1:2)) |>
+#     # group by species to have the size of species range's union
+#     dplyr::group_by(sci_name) |>
+#     dplyr::summarize(geometry = sf::st_union(geometry)) |>
+#     sf::st_make_valid() |>
+#     dplyr::mutate(IUCN_range_km2 = round(units::set_units(sf::st_area(geometry), km^2), 2)) |>
+#     sf::st_drop_geometry()
+#   
+#   bird_range_calc <- dplyr::bind_rows(bird_range_calc, bird_range_calc_temp)
+#   print(f)
+# }
+# saveRDS(bird_range_calc, "data/derived-data/04_IUCN_range_calculated.rds")
+
+bird_range_calc <- readRDS("data/derived-data/04_IUCN_range_calculated.rds")
+
+traits_b_all_aoh <- dplyr::left_join(
+  traits_b_all,
+  dplyr::left_join(
+    bird_range_calc |> dplyr::rename(scientificName = sci_name) |> units::drop_units(), 
+    aoh_b |> dplyr::select(BINOMIAL, Model_prevalence)|> dplyr::rename(scientificName = BINOMIAL)))
+
+colSums(is.na(traits_m_all_aoh))
+
+traits_m_all_aoh[is.na(traits_m_all_aoh)] <-1
+traits_m_all_aoh$AoH_range_km2 <- traits_m_all_aoh$IUCN_range_km2*traits_m_all_aoh$Model_prevalence
+
+plot(traits_m_all_aoh$IUCN_range_km2, traits_m_all_aoh$AoH_range_km2)
+
+
+
+
 aoh_b_list <- aoh_b |> dplyr::filter(BINOMIAL %in% c(all_b, "Psittacula eques", "Sylvia conspicillata", 
                                                      "Sylvia melanocephala", "Gygis alba", "Atlantisia rogersi"))
 setdiff(all_b, aoh_b_list$BINOMIAL)
@@ -278,6 +344,6 @@ no_match
 nrow(exclu)+nrow(aoh_b_list)
 
 
-saveRDS(traits_b_all, "data/derived-data/04_Bird_traits.RDS")
+saveRDS(traits_b_all_aoh, "data/derived-data/04_Bird_traits.RDS")
 
 

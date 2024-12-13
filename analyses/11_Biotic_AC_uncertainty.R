@@ -20,6 +20,101 @@ isl <- readRDS("data/derived-data/01_shp_45_major_isl.rds")
 
 # calculate functional redundancy
 
+str(tr_birds)
+str(tr_mam)
+
+# group species into FE -- birds
+
+quant_mass_b <- quantile(tr_birds$Mass, c(0.25,0.5,0.75))
+quant_genl_b <- quantile(tr_birds$GenLength, c(0.25,0.5,0.75))
+
+tr_fr_b <- tr_birds |>
+  dplyr::mutate(nb_hab_cat = ifelse(nb_hab>4, 5, nb_hab),
+                nb_diet_cat = ifelse(nb_diet>4, 5, nb_diet),
+                mass_cat = dplyr::case_when(
+                  Mass < quant_mass_b[1] ~ 1,
+                  Mass >= quant_mass_b[1] & Mass < quant_mass_b[2] ~ 2,
+                  Mass >= quant_mass_b[2] & Mass < quant_mass_b[3] ~ 3,
+                  Mass >= quant_mass_b[3] ~ 4),
+                genlength_cat = dplyr::case_when(
+                  GenLength < quant_genl_b[1] ~ 1,
+                  GenLength >= quant_genl_b[1] & GenLength < quant_genl_b[2] ~ 2,
+                  GenLength >= quant_genl_b[2] & GenLength < quant_genl_b[3] ~ 3,
+                  GenLength >= quant_genl_b[3] ~ 4))|>
+  dplyr::select(scientificName, contains("_cat")) |>
+  dplyr::mutate(Class = "Aves")
+
+# group species into FE -- mammals
+quant_mass_m <- quantile(tr_mam$adult_mass_g, c(0.25,0.5,0.75))
+quant_genl_m <- quantile(tr_mam$generation_length_d, c(0.25,0.5,0.75))
+
+tr_fr_m <- tr_mam |>
+  dplyr::mutate(nb_hab_cat = ifelse(hab_breadth>4, 5, hab_breadth),
+                nb_diet_cat = ifelse(det_diet_breadth_n>4, 5, det_diet_breadth_n),
+                mass_cat = dplyr::case_when(
+                  adult_mass_g < quant_mass_m[1] ~ 1,
+                  adult_mass_g >= quant_mass_m[1] & adult_mass_g < quant_mass_m[2] ~ 2,
+                  adult_mass_g >= quant_mass_m[2] & adult_mass_g < quant_mass_m[3] ~ 3,
+                  adult_mass_g >= quant_mass_m[3] ~ 4),
+                genlength_cat = dplyr::case_when(
+                  generation_length_d < quant_genl_m[1] ~ 1,
+                  generation_length_d >= quant_genl_m[1] & generation_length_d < quant_genl_m[2] ~ 2,
+                  generation_length_d >= quant_genl_m[2] & generation_length_d < quant_genl_m[3] ~ 3,
+                  generation_length_d >= quant_genl_m[3] ~ 4))|>
+  dplyr::select(scientificName, contains("_cat")) |>
+  dplyr::mutate(Class = "Mammalia")
+
+
+
+tr_fr <- dplyr::bind_rows(tr_fr_m, tr_fr_b)|>
+  textshape::column_to_rownames("scientificName")|>
+  dplyr::mutate_if(is.numeric, as.ordered) |>
+  dplyr::mutate(Class = as.factor(Class))
+
+
+# trait categories
+tr_cat <- data.frame(
+  trait_name = colnames(tr_fr),
+  trait_type = c("O","O","O","O","N"),
+  fuzzy_name = NA
+)
+
+#group species to FE 
+sp_FEs <- mFD::sp.to.fe(
+  sp_tr      = tr_fr, 
+  tr_cat     = tr_cat, 
+  fe_nm_type = "fe_rank")
+
+
+# a matrix linking occurrences (coded as 0/1) of species (columns) in a set of assemblages (rows). 
+str(birds)
+str(mam)
+
+sp_isl_occ <- 
+
+mFD::alpha.fd.fe()
+
+
+
+# Gather species into FEs:
+## gathering species into FEs (FEs named according to the decreasing...
+## ...  number of species they gather):
+sp_FEs <- mFD::sp.to.fe(
+  sp_tr      = fruits_traits, 
+  tr_cat     = fruits_traits_cat, 
+  fe_nm_type = "fe_rank")
+
+## display FEs names:
+sp_FEs$fe_nm
+
+## display for each species the name of the FE it belongs to:
+sp_FEs$sp_fe
+
+## display trait values for each FE:
+sp_FEs$fe_tr
+
+## display the number of species per FEs:
+sp_FEs$fe_nb_sp
 
 
 # aggregate mean trait per island

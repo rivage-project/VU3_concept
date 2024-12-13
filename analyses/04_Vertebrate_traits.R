@@ -80,7 +80,7 @@ aoh_b <- read.csv("data/raw-data/AoH/Birds_list_AOH.csv")
 
 #### SELECT TRAITS AND MATCH TAXONOMIES ####
 
-# MAMMALS 
+##### MAMMALS #####
 
 # check the number of imputed values for each trait
 traits_m_rep <- comb_rep |> # reported dataset
@@ -153,7 +153,7 @@ saveRDS(traits_m_all_aoh, "data/derived-data/04_Mammal_traits.RDS")
 
 
 
-# BIRDS
+##### BIRDS #####
 
 avo_b <- avonet |>
   dplyr::filter(Species1 %in% hb_b$scientificName)
@@ -262,7 +262,7 @@ corresp <- c("Gallinula galeata" = "Gallinula chloropus",
              "Zosterops mauritianus" = "Zosterops borbonicus",
              "Puffinus bailloni" = "Puffinus lherminieri",
              "Puffinus elegans" = "Puffinus assimilis",
-             "Puffinus subalaris" = "Puffinus lherminieri ",
+             "Puffinus subalaris" = "Puffinus lherminieri",
              "Gygis candida" = "Gygis alba")
 
 db_to_add <- dplyr::left_join(data.frame(Scientific = corresp, Syno = names(corresp)), elton_db)|> 
@@ -310,38 +310,56 @@ traits_b_all <- dplyr::left_join(
 
 bird_range_calc <- readRDS("data/derived-data/04_IUCN_range_calculated.rds")
 
+# check if all birds have AoH info
+aoh_b_list <- aoh_b |> dplyr::filter(BINOMIAL %in% c(all_b)) |>
+  dplyr::select(BINOMIAL, Model_prevalence)|>
+  dplyr::mutate(scientificName = BINOMIAL) # for matching with final db
+length(setdiff(all_b, aoh_b_list$BINOMIAL))
+# 51 species are missing in AoH database
+exclu_aoh <- read.csv("data/raw-data/AoH/Birds_list_excluded.csv")
+sum(all_b %in% exclu_aoh$BINOMIAL)
+# 46 species are in the list of excluded birds
+
+# 5 species did not match any list
+missing <- c("Curruca conspicillata" = "Sylvia conspicillata", 
+  "Curruca melanocephala" = "Sylvia melanocephala", 
+  "Gygis candida" = "Gygis alba",
+  "Alexandrinus eques" = "Psittacula eques",
+  "Laterallus rogersi" = "Atlantisia rogersi")
+
+missing %in% aoh_b$BINOMIAL # 3 sp in Aoh DB
+missing %in% exclu_aoh$BINOMIAL # 2 species in the list of excluded birds
+# all the species are found!
+
+# add the 3 species with info
+to_match <- missing[missing %in% aoh_b$BINOMIAL]
+aoh_to_add <- dplyr::left_join(data.frame(BINOMIAL = to_match, Syno = names(to_match)), aoh_b)|> 
+  dplyr::mutate(scientificName = Syno) |>
+  dplyr::select(BINOMIAL, scientificName, Model_prevalence)
+
+aoh_all_b <- dplyr::bind_rows(aoh_b_list, aoh_to_add) |> dplyr::distinct()
+# do we have all the species, either in aaoh db or in exluded birds?
+nrow(aoh_all_b)+ sum(c(all_b, missing) %in% exclu_aoh$BINOMIAL)
+# yes 240!!
+
+
+# final join with trait db
+
 traits_b_all_aoh <- dplyr::left_join(
   traits_b_all,
   dplyr::left_join(
     bird_range_calc |> dplyr::rename(scientificName = sci_name) |> units::drop_units(), 
-    aoh_b |> dplyr::select(BINOMIAL, Model_prevalence)|> dplyr::rename(scientificName = BINOMIAL)))
+    aoh_all_b |> dplyr::select(scientificName, Model_prevalence)))
 
-colSums(is.na(traits_m_all_aoh))
-
-traits_m_all_aoh[is.na(traits_m_all_aoh)] <-1
-traits_m_all_aoh$AoH_range_km2 <- traits_m_all_aoh$IUCN_range_km2*traits_m_all_aoh$Model_prevalence
-
-plot(traits_m_all_aoh$IUCN_range_km2, traits_m_all_aoh$AoH_range_km2)
+colSums(is.na(traits_b_all_aoh))
 
 
+traits_b_all_aoh[is.na(traits_b_all_aoh)] <-1
+traits_b_all_aoh$AoH_range_km2 <- traits_b_all_aoh$IUCN_range_km2*traits_b_all_aoh$Model_prevalence
 
 
-aoh_b_list <- aoh_b |> dplyr::filter(BINOMIAL %in% c(all_b, "Psittacula eques", "Sylvia conspicillata", 
-                                                     "Sylvia melanocephala", "Gygis alba", "Atlantisia rogersi"))
-setdiff(all_b, aoh_b_list$BINOMIAL)
-
-
-exclu_aoh <- read.csv("data/raw-data/AoH/Birds_list_excluded.csv")
-sum(all_b %in% exclu_aoh$BINOMIAL)
-
-exclu <- exclu_aoh |>
-  dplyr::filter(BINOMIAL %in% all_b)
-
-
-no_match <- setdiff(all_b, c(exclu$BINOMIAL, aoh_b_list$BINOMIAL))
-no_match
-
-nrow(exclu)+nrow(aoh_b_list)
+plot(traits_b_all_aoh$IUCN_range_km2, traits_b_all_aoh$AoH_range_km2)
+colSums(is.na(traits_b_all_aoh))
 
 
 saveRDS(traits_b_all_aoh, "data/derived-data/04_Bird_traits.RDS")

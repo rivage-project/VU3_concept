@@ -90,31 +90,67 @@ sp_FEs <- mFD::sp.to.fe(
 str(birds)
 str(mam)
 
-sp_isl_occ <- 
+mam_isl <- mam |> dplyr::rename(ID=ULM_ID) |> dplyr::distinct(ID, sci_name)
+bird_isl<- dplyr::left_join(birds, isl |> sf::st_drop_geometry()) |> 
+  dplyr::distinct(ID, sci_name)
+sp_isl <- dplyr::bind_rows(mam_isl, bird_isl)
 
-mFD::alpha.fd.fe()
+sp_isl_occ <- sp_isl |>
+  dplyr::mutate(occ = 1) |>
+  tidyr::pivot_wider(names_from = sci_name, 
+                     values_from = occ,
+                     values_fill = 0) |>
+  textshape::column_to_rownames("ID")
+
+length(unique(mam_isl$sci_name)) + length(unique(bird_isl$sci_name))
+ncol(sp_isl_occ)
+nrow(sp_isl_occ)
+
+
+alpha <- mFD::alpha.fd.fe(
+  asb_sp_occ = sp_isl_occ,
+  sp_to_fe = sp_FEs
+)
+
+ac_biotic_com <- as.data.frame(alpha$asb_fdfe) |>
+  tibble::rownames_to_column("ID") |>
+  dplyr::mutate(ID = as.numeric(ID))
 
 
 
-# Gather species into FEs:
-## gathering species into FEs (FEs named according to the decreasing...
-## ...  number of species they gather):
-sp_FEs <- mFD::sp.to.fe(
-  sp_tr      = fruits_traits, 
-  tr_cat     = fruits_traits_cat, 
-  fe_nm_type = "fe_rank")
+# normalize mass and hwi to get species dispersal for birds and mammals combined
 
-## display FEs names:
-sp_FEs$fe_nm
 
-## display for each species the name of the FE it belongs to:
-sp_FEs$sp_fe
+min_hwi = min(tr_birds$`Hand-Wing.Index`)
+max_hwi = max(tr_birds$`Hand-Wing.Index`)
+#log transform mass because seals are super outsiders, especially southern elephant seal
+tr_mam$log_mass <- log(tr_mam$adult_mass_g)
+min_mass = min(tr_mam$log_mass)
+max_mass = max(tr_mam$log_mass)
 
-## display trait values for each FE:
-sp_FEs$fe_tr
+ac_biotic_sp <- dplyr::bind_rows(
+  tr_birds |> 
+    dplyr::mutate(dispersal = (`Hand-Wing.Index` - min_hwi)/(max_hwi-min_hwi)) |>
+    dplyr::select(scientificName, dispersal),
+  tr_mam |>
+    dplyr::mutate(dispersal = (log_mass - min_mass)/(max_mass-min_mass)) |>
+  dplyr::select(scientificName, dispersal)) |> 
+  dplyr::rename(sci_name = scientificName)
 
-## display the number of species per FEs:
-sp_FEs$fe_nb_sp
+
+hist(ac_biotic_sp$dispersal)
+hist(tr_birds$`Hand-Wing.Index`)
+hist(tr_mam$log_mass)
+
+# add species occurrences on islands
+ac_biotic_sp_isl <- dplyr::left_join(sp_isl, ac_biotic_sp)
+
+
+saveRDS(ac_biotic_sp, "data/derived-data/11_Biotic_AC_BM_species.rds")
+saveRDS(ac_biotic_com, "data/derived-data/11_Biotic_AC_BM_community.rds")
+
+
+################################## see if useful after or not
 
 
 # aggregate mean trait per island

@@ -14,13 +14,7 @@ tr_birds <- readRDS("data/derived-data/12_Bird_traits.RDS")
 tr_mam <- readRDS("data/derived-data/12_Mammal_traits.RDS")
 
 # load islands
-isl_select <- read.csv("data/derived-data/01_selected_islands.csv")
-minor_islands <- c(
-  "Isla Graciosa","Isla de Alegranza","Lobos","Isla de Montana Clara", # Canary
-  "Lisianski Island","Sand Island","Lehua","Laysan Island", "Ford Island", # Hawaii
-  "Ile d' Ambre", # Mascarene
-  "Isla Bartolome", "Isla Seymour", "Isla Darwin"# Galapagos
-)
+isl
 
 ##### Mammals #####
 

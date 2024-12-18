@@ -1,20 +1,70 @@
 # Sensitivity for vertebrates
-# => use script from WS#2 to include uncertainty
 
 rm(list=ls())
-library("tidyverse")
 
 
 # load bird and mammal checklists per island
-birds <- readRDS("data/derived-data/12_bird_ckl_islands_clean.RDS")
-mam <- readRDS("data/derived-data/10_mammals_inter_isl_clean.RDS")
+birds <- readRDS("data/derived-data/02_bird_ckl_45_isl.rds")
+mam <- readRDS("data/derived-data/03_mammal_ckl_45_isl.rds")
 
 # load traits
-tr_birds <- readRDS("data/derived-data/12_Bird_traits.RDS")
-tr_mam <- readRDS("data/derived-data/12_Mammal_traits.RDS")
+tr_birds <- readRDS("data/derived-data/04_Bird_traits.RDS")
+tr_mam <- readRDS("data/derived-data/04_Mammal_traits.RDS")
 
 # load islands
-isl
+isl <- readRDS("data/derived-data/01_shp_45_major_isl.rds")
+
+
+
+# Combine birds and mammals
+
+
+
+# normalize metrics that have not the same units between birds and mammals
+# generation length
+# min_glb = min(tr_birds$GenLength)
+# max_glb = max(tr_birds$GenLength)
+# 
+# min_glm = min(tr_mam$generation_length_d)
+# max_glm = max(tr_mam$generation_length_d)
+
+# or convert all metric to same unit:
+#   - nb diet, nb hab and AoH have the same unit
+#   - gen length is in days for mammals and years for birds => convert days to years 
+
+sens_sp <- dplyr::bind_rows(
+  tr_birds |> 
+    dplyr::mutate(gen_length = GenLength) |> #(GenLength - min_glb)/(max_glb-min_glb)
+    dplyr::select(scientificName, nb_hab, nb_diet, AoH_range_km2, gen_length),
+  tr_mam |>
+    dplyr::mutate(gen_length = generation_length_d/365) |> #(generation_length_d - min_glm)/(max_glm-min_glm)
+    dplyr::rename(nb_diet = det_diet_breadth_n,
+                  nb_hab = hab_breadth) |>
+    dplyr::select(scientificName, nb_hab, nb_diet, AoH_range_km2, gen_length)) |> 
+  dplyr::rename(sci_name = scientificName)
+
+
+hist(sens_sp$gen_length)
+hist(tr_birds$GenLength)
+hist(tr_mam$generation_length_d/365)
+
+# add species occurrences on islands
+
+mam_isl <- mam |> dplyr::rename(ID=ULM_ID) |> dplyr::distinct(ID, sci_name)
+bird_isl<- dplyr::left_join(birds, isl |> sf::st_drop_geometry()) |> 
+  dplyr::distinct(ID, sci_name)
+sp_isl <- dplyr::bind_rows(mam_isl, bird_isl)
+
+sens_sp_isl <- dplyr::left_join(sp_isl, sens_sp)
+
+
+saveRDS(sens_sp_isl, "data/derived-data/05_traits_BM_45_isl.rds")
+
+
+
+
+
+#################################### Let's see after if its useful
 
 ##### Mammals #####
 

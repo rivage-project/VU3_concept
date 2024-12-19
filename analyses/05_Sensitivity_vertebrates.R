@@ -34,17 +34,18 @@ isl <- readRDS("data/derived-data/01_shp_45_major_isl.rds")
 
 sens_sp <- dplyr::bind_rows(
   tr_birds |> 
-    dplyr::mutate(gen_length = GenLength) |> #(GenLength - min_glb)/(max_glb-min_glb)
-    dplyr::select(scientificName, nb_hab, nb_diet, AoH_range_km2, gen_length),
+    dplyr::mutate(gen_length_y = GenLength) |> #(GenLength - min_glb)/(max_glb-min_glb)
+    dplyr::select(scientificName, nb_hab, nb_diet, AoH_range_km2, gen_length_y),
   tr_mam |>
-    dplyr::mutate(gen_length = generation_length_d/365) |> #(generation_length_d - min_glm)/(max_glm-min_glm)
+    dplyr::mutate(gen_length_y = generation_length_d/365) |> #(generation_length_d - min_glm)/(max_glm-min_glm)
     dplyr::rename(nb_diet = det_diet_breadth_n,
                   nb_hab = hab_breadth) |>
-    dplyr::select(scientificName, nb_hab, nb_diet, AoH_range_km2, gen_length)) |> 
-  dplyr::rename(sci_name = scientificName)
+    dplyr::select(scientificName, nb_hab, nb_diet, AoH_range_km2, gen_length_y)) |> 
+  dplyr::rename(sci_name = scientificName,
+                aoh_km2 = AoH_range_km2)
 
 
-hist(sens_sp$gen_length)
+hist(sens_sp$gen_length_y)
 hist(tr_birds$GenLength)
 hist(tr_mam$generation_length_d/365)
 

@@ -117,6 +117,32 @@ th_agg <- readRDS("data/derived-data/23_Exposure_45_isl.rds")
 expo <- th_agg[["th_max_min"]] # select log, rank, max_min
 
 
+
+source("R/Calculate_components_VU_FUN.R")
+
+data_all <- readRDS("outputs/30_all_VU_components_45_isl_266_BM_sp.rds")
+
+# get exposure
+E_birds <- exposureFUN(data_all)
+
+
+################
+# compare with functions from Gabriel => same result!
+th_agg <- readRDS("data/derived-data/23_Exposure_45_isl.rds")
+expo <- th_agg[["th_max_min"]] # select log, rank, max_min
+expo$ID==E_birds$ID
+
+colnames(expo) <- paste0(colnames(expo), "_prev")
+comp <- dplyr::left_join(expo |> dplyr::rename(ID = ID_prev), E_birds)
+comp$expo_new <- (comp$expo_prev - min(comp$expo_prev))/(max(comp$expo_prev)-min(comp$expo_prev))
+hist(comp$expo_prev)
+hist(comp$expo_new)
+hist(comp$exposure)
+
+plot(comp$expo_new, comp$exposure)
+round(comp$expo_new,3)==round(comp$exposure,3)
+################
+
 RColorBrewer::brewer.pal(12, "Paired")
 
 #take the same colors as first fig

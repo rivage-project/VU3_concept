@@ -28,13 +28,13 @@ normaliseFUN <- function(norm, df) {
   df_or <- df
   
   if(any(colnames(df)=='sci_name')){
-    df <- df %>% 
-      select(-sci_name_IUCN)
+    df <- df |> 
+      dplyr::select(-sci_name)
   }
   
   if(any(colnames(df)=='ID')){
-    df <- df %>% 
-      select(-ULM_ID)
+    df <- df |> 
+      dplyr::select(-ID)
   }
   
   if(!(norm %in% c("minmax", "logminmax", "rankminmax"))){
@@ -59,7 +59,8 @@ normaliseFUN <- function(norm, df) {
   if(norm == "rankminmax"){
     # Rank normalization
     df <- apply(df, 2, function(x){
-      (dense_rank(x) - min(dense_rank(x), na.rm = TRUE))/(max(dense_rank(x), na.rm = TRUE) - min(dense_rank(x), na.rm = TRUE))
+      (dplyr::dense_rank(x) - min(dplyr::dense_rank(x), na.rm = TRUE))/
+        (max(dplyr::dense_rank(x), na.rm = TRUE) - min(dplyr::dense_rank(x), na.rm = TRUE))
     })
   }
   
@@ -95,9 +96,10 @@ normaliseFUN <- function(norm, df) {
 
 exposureFUN <-
   function(expo_df, 
-           lu_cols = c("mean_HM_change","mean_HM_static_2017", "rdens_osm"),
+           lu_cols = c("mean_HM_change", "rdens_osm"),
            cc_cols = "sed_tot_med",
-           ias_cols = c("nb_alien_bird", "prop_alien_bird", "alien_bird_cover"),
+           ias_cols = c("nb_alien", "alien_vert_cover"),
+           isl_col_name = "ID",
            inv_variables = NULL,
            norm = "minmax"){
     
@@ -107,26 +109,21 @@ exposureFUN <-
     }
     
     expo_df_unq <- 
-      expo_df[, c("ULM_ID", 
+      expo_df[, c(isl_col_name, 
                   lu_cols,
                   cc_cols,
-                  ias_cols)] %>% 
+                  ias_cols)] |> 
       unique()
     
     exposure_df_norm <- 
       normaliseFUN(norm = norm,
-                   df = expo_df_unq[!names(expo_df_unq) %in% c("ULM_ID")])
+                   df = expo_df_unq[!names(expo_df_unq) %in% isl_col_name])
     
     if(any(inv_variables %in% names(exposure_df_norm))){
-      
       this_invs <- inv_variables[inv_variables %in% names(exposure_df_norm)]
-      
       for(inv in this_invs){
-        
         exposure_df_norm[,inv] <- 1 - exposure_df_norm[,inv]
-        
       }
-      
     }
     
     lu <- apply(exposure_df_norm[lu_cols], 1,
@@ -138,25 +135,25 @@ exposureFUN <-
     
     exposure_df_norm$lu <- 
       normaliseFUN(norm = norm,
-                   df = data.frame(lu))
+                   df = data.frame(lu))$lu
     
     exposure_df_norm$cc <- 
       normaliseFUN(norm = norm,
-                   df = data.frame(cc))
+                   df = data.frame(cc))$cc
     
     exposure_df_norm$ias <- 
       normaliseFUN(norm = norm,
-                   df = data.frame(ias))
+                   df = data.frame(ias))$ias
     
     exposure <- exposure_df_norm$lu + exposure_df_norm$cc + exposure_df_norm$ias
     
+    # normalize final exposure with minmax only
     exposure_df_norm$exposure <- 
-      normaliseFUN(norm = norm,
-                   df = data.frame(exposure)) %>% 
+      normaliseFUN(norm = "minmax",
+                   df = data.frame(exposure)) |> 
       unlist()
     
-    exposure_df_norm$ULM_ID <-
-      expo_df_unq$ULM_ID
+    exposure_df_norm$ID <- expo_df_unq[,isl_col_name]
     
     return(exposure_df_norm)
     
@@ -186,8 +183,10 @@ exposureFUN <-
 #' x
 
 sensitivityFUN <- function(sens_df,
-                           sens_cols = c("Range.Size", "nb_diet", "nb_hab", "GenLength"),
-                           inv_variables = c("Range.Size", "nb_hab", "nb_diet"),
+                           sens_cols = c("aoh_km2", "nb_diet", "nb_hab", "gen_length_y"),
+                           inv_variables = c("aoh_km2", "nb_hab", "nb_diet"),
+                           sp_col_name = "sci_name",
+                           isl_col_name = "ID",
                            norm = "minmax"){
   
   if(!(norm %in% c("minmax", "logminmax", "rankminmax"))){
@@ -196,27 +195,20 @@ sensitivityFUN <- function(sens_df,
   }
   
   sens_df_unq <- 
-    sens_df[, c("sci_name_IUCN", 
-                sens_cols)] %>% 
+    sens_df[, c(sp_col_name, 
+                sens_cols)] |> 
     unique()
   
   sens_df_norm <- normaliseFUN(norm = norm,
-                               df = sens_df_unq[!names(sens_df_unq) %in% c("sci_name_IUCN")])
+                               df = sens_df_unq[!names(sens_df_unq) %in% sp_col_name])
   
   
   if(any(inv_variables %in% names(sens_df_norm))){
-    
     this_invs <- inv_variables[inv_variables %in% names(sens_df_norm)]
-    
     for(inv in this_invs){
-      
       sens_df_norm[,inv] <- 1 - sens_df_norm[,inv]
-      
     }
-    
   }
-  
-  
   
   # calculate sensitivity
   sensitivity <- apply(sens_df_norm, 1,
@@ -225,18 +217,42 @@ sensitivityFUN <- function(sens_df,
   # normalise sensitivity with mix max only
   sens_df_norm$sensitivity <- 
     normaliseFUN(norm = 'minmax',
-                 df = data.frame(sensitivity)) %>% 
+                 df = data.frame(sensitivity)) |> 
     unlist()
   
-  sens_df_norm$sci_name_IUCN <-
-    sens_df_unq$sci_name_IUCN
+  sens_df_norm$sci_name <- sens_df_unq[,sp_col_name]
   
   return(sens_df_norm)
 }
 
+#' Calculate adaptive capacity
+#' 
+#' @description
+#' This function prints a simple message. This is a demo function to show good
+#' practices in writing and documenting R function. If you delete this function
+#' do not forget to delete the corresponding test file 
+#' `tests/testthat/test-demo.R` if you used `new_package(test = TRUE)`.
+#' 
+#' @param x a character of length 1. Default is `'Hello world'`.
+#'
+#' @return The value of `x` (only if the result is assigned to a variable).
+#' 
+#' @export
+#'
+#' @examples
+#' print_msg()
+#' print_msg("Bonjour le monde")
+#' 
+#' x <- print_msg("Bonjour le monde")
+#' x
+
 adaptive_capacityFUN <- function(ac_df,
-                                 ac_sp_cols = c('Hand-Wing.Index', 'Mass'),
-                                 ac_isl_cols = c('mean_elev', 'mean_tri', 'PA_prop'),
+                                 ac_biotic_cols = c('dispersal', 'fred'),
+                                 ac_abiotic_cols = c('Area', 'max_elev', 'mean_tri', 'PA_prop'),
+                                 ac_sp_cols = c('dispersal'),
+                                 ac_isl_cols = c('Area', 'max_elev', 'mean_tri', 'PA_prop', 'fred'),
+                                 sp_col_name = "sci_name",
+                                 isl_col_name = "ID",
                                  inv_variables = NULL,
                                  norm = "minmax"){
   
@@ -245,74 +261,99 @@ adaptive_capacityFUN <- function(ac_df,
          'logminmax' or 'rankminmax'.")
   }
   
-  df_species <- unique(ac_df[, c('ULM_ID', 'sci_name_IUCN', ac_sp_cols)])
-  df_islands <- unique(ac_df[, c('ULM_ID', ac_isl_cols)])
+  df_species <- unique(ac_df[, c(sp_col_name, isl_col_name, ac_sp_cols)])
+  df_islands <- unique(ac_df[, c(isl_col_name, ac_isl_cols)])
   
   # Normalize each trait
   df_species_norm <- normaliseFUN(norm = norm, df = df_species)
   df_islands_norm <- normaliseFUN(norm = norm, df = df_islands)
   
   if(any(inv_variables %in% names(df_species_norm))){
-    
     this_invs <- inv_variables[inv_variables %in% names(df_species_norm)]
-    
     for(inv in this_invs){
-      
       df_species_norm[,inv] <- 1 - df_species_norm[,inv]
-      
     }
-    
   }
   
   if(any(inv_variables %in% names(df_islands_norm))){
-    
     this_invs <- inv_variables[inv_variables %in% names(df_islands_norm)]
-    
     for(inv in this_invs){
-      
       df_islands_norm[,inv] <- 1 - df_islands_norm[,inv]
-      
     }
-    
   }
   
-  df_species_norm$ULM_ID <- df_species$ULM_ID
-  df_species_norm$sci_name_IUCN <- df_species$sci_name_IUCN
-  df_islands_norm$ULM_ID <- df_islands$ULM_ID
-  df_islands_norm$ARCHIP <- df_islands$ARCHIP
+  df_species_norm$ID <- df_species[,isl_col_name]
+  df_species_norm$sci_name <- df_species[,sp_col_name]
+  df_islands_norm$ID <- df_islands[,isl_col_name]
   
   # bind data together
-  out_df <- dplyr::full_join(df_species_norm[, c('ULM_ID', 'sci_name_IUCN', ac_sp_cols)], 
-                             df_islands_norm[, c('ULM_ID', ac_isl_cols)],
-                             by='ULM_ID')
+  ac_df_norm <- dplyr::full_join(df_species_norm[, c('ID', 'sci_name', ac_sp_cols)], 
+                             df_islands_norm[, c('ID', ac_isl_cols)],
+                             by='ID')
   
-  # calculate adapative capacity
-  adaptive_capacity <-
-    apply(out_df[!names(out_df) %in% c("ULM_IF", "sci_name_IUCN", "ARCHIP")], 1, function(x) sum(x, na.rm = TRUE))
+  ac_abiotic <- apply(ac_df_norm[ac_abiotic_cols], 1,
+              function(x) sum(x, na.rm = TRUE))
+  ac_biotic <- apply(ac_df_norm[ac_biotic_cols], 1,
+              function(x) sum(x, na.rm = TRUE))
   
-  # normalise adaptive capacity with mix max only
-  out_df$adaptive_capacity <- 
-    normaliseFUN(norm = 'minmax', 
-                 df = data.frame(adaptive_capacity)) %>% 
+  ac_df_norm$ac_abiotic <- 
+    normaliseFUN(norm = norm,
+                 df = data.frame(ac_abiotic))$ac_abiotic
+  
+  ac_df_norm$ac_biotic <- 
+    normaliseFUN(norm = norm,
+                 df = data.frame(ac_biotic))$ac_biotic
+
+  adaptive_capacity <- ac_df_norm$ac_biotic + ac_df_norm$ac_abiotic
+  
+  # normalize final AC with minmax only
+  ac_df_norm$adaptive_capacity <- 
+    normaliseFUN(norm = "minmax",
+                 df = data.frame(adaptive_capacity)) |> 
     unlist()
   
-  return(out_df)
+  return(ac_df_norm)
 }
+
+
+#' Calculate Vulnerability
+#' 
+#' @description
+#' This function prints a simple message. This is a demo function to show good
+#' practices in writing and documenting R function. If you delete this function
+#' do not forget to delete the corresponding test file 
+#' `tests/testthat/test-demo.R` if you used `new_package(test = TRUE)`.
+#' 
+#' @param x a character of length 1. Default is `'Hello world'`.
+#'
+#' @return The value of `x` (only if the result is assigned to a variable).
+#' 
+#' @export
+#'
+#' @examples
+#' print_msg()
+#' print_msg("Bonjour le monde")
+#' 
+#' x <- print_msg("Bonjour le monde")
 
 vulnerabilityFUN <-
   function(df, 
            norm = "minmax",
-           sens_cols = c("Range.Size", "nb_diet", "nb_hab", "GenLength"),
-           ac_sp_cols = c('Hand-Wing.Index', 'Mass'),
-           ac_isl_cols = c('mean_elev', 'mean_tri', 'PA_prop'),
-           lu_cols = c("mean_HM_change","mean_HM_static_2017", "rdens_osm"),
+           sp_col_name = "sci_name",
+           isl_col_name = "ID",
+           sens_cols = c("aoh_km2", "nb_diet", "nb_hab", "gen_length_y"),
+           ac_biotic_cols = c('dispersal', 'fred'),
+           ac_abiotic_cols = c('Area', 'max_elev', 'mean_tri', 'PA_prop'),
+           ac_sp_cols = c('dispersal'),
+           ac_isl_cols = c('Area', 'max_elev', 'mean_tri', 'PA_prop', 'fred'),
+           lu_cols = c("mean_HM_change", "rdens_osm"),
            cc_cols = "sed_tot_med",
-           ias_cols = c("nb_alien_bird", "prop_alien_bird", "alien_bird_cover"),
+           ias_cols = c("nb_alien", "alien_vert_cover"),
            summary_method = "sum",
            n_samples = 1,
            prop_samples = 1,
            by_island = FALSE,
-           inv_variables = c("Range.Size", "nb_hab", "nb_diet")){
+           inv_variables = c("aoh_km2", "nb_hab", "nb_diet")){
     
     bootstrap_df <-
       pbapply::pblapply(1:n_samples, function(i){
@@ -326,19 +367,26 @@ vulnerabilityFUN <-
                       lu_cols = lu_cols, 
                       cc_cols = cc_cols, 
                       ias_cols = ias_cols, 
+                      isl_col_name = isl_col_name,
                       inv_variables = inv_variables,
-                      norm)
+                      norm = norm)
         
         S_df <- 
           sensitivityFUN(sens_df = df[bootstrap_samples,], 
                          sens_cols = sens_cols, 
+                         isl_col_name = isl_col_name,
+                         sp_col_name = sp_col_name,
                          inv_variables = inv_variables,
                          norm = norm)
         
         AC_df <- 
           adaptive_capacityFUN(ac_df = df[bootstrap_samples,], 
+                               ac_biotic_cols = ac_biotic_cols,
+                               ac_abiotic_cols = ac_abiotic_cols,
                                ac_sp_cols = ac_sp_cols,
                                ac_isl_cols = ac_isl_cols,
+                               isl_col_name = isl_col_name,
+                               sp_col_name = sp_col_name,
                                inv_variables = inv_variables,
                                norm = norm)
         
@@ -351,100 +399,85 @@ vulnerabilityFUN <-
           AdaptCapacity = c(1, 0))
         rownames(sol) <- c("pos", "neg")
         
-        isl_info <- df[c(1, 2, 15)] %>% unique
+        # initiate database
         
         compo <- 
-          dplyr::left_join(AC_df[c("adaptive_capacity", "sci_name_IUCN", "ULM_ID")],
-                           E_df[c("exposure","ULM_ID")], by = join_by(ULM_ID)) %>% 
-          dplyr::left_join(S_df[c("sensitivity", "sci_name_IUCN")], by = join_by(sci_name_IUCN)) %>% 
-          dplyr::left_join(isl_info, by = join_by(ULM_ID))
+          dplyr::left_join(AC_df[c("adaptive_capacity", isl_col_name, sp_col_name)],
+                           E_df[c("exposure", isl_col_name)], by = isl_col_name) |> 
+          dplyr::left_join(S_df[c("sensitivity", sp_col_name)], by = sp_col_name)
+        
         
         if(by_island == TRUE){
           
           compo <-
-            compo %>% 
-            dplyr::group_by(ULM_ID) %>% 
-            dplyr::summarise(Island_name = unique(Island_name),
-                             ARCHIP = unique(ARCHIP),
-                             exposure = median(exposure),
+            compo |> 
+            dplyr::group_by(eval(as.name(isl_col_name))) |> 
+            dplyr::summarise(exposure = median(exposure),
                              sensitivity = median(sensitivity),
                              adaptive_capacity = median(adaptive_capacity))
-          
+          colnames(compo)[1] <- isl_col_name
         }
         
-        compo <- compo %>%
-          mutate(E = exposure,
+        
+        compo <- compo |>
+          dplyr::mutate(E = exposure,
                  S = sensitivity,
-                 AC = adaptive_capacity) %>%
+                 AC = adaptive_capacity) |>
           # Calculate VU = E+S-AC and rank isl 
-          mutate(Vu_sum = E + S - AC) %>%
-          mutate(Vu_rank_sum = dense_rank(Vu_sum)) %>%
+          dplyr::mutate(Vu_sum = E + S - AC) |>
+          dplyr::mutate(Vu_rank_sum = dplyr::dense_rank(Vu_sum)) |>
           # Calculate TOPSIS VU and rank isl 
-          mutate(
+          dplyr::mutate(
             pos_sol = ((E-sol[1,1])^2 + (S-sol[1,2])^2 + (AC-sol[1,3])^2)^0.5,
             neg_sol = ((E-sol[2,1])^2 + (S-sol[2,2])^2 + (AC-sol[2,3])^2)^0.5,
-          ) %>%
-          mutate(Vu_TOPSIS = pos_sol / (pos_sol + neg_sol)) %>%
-          mutate(Vu_rank_TOPSIS = dense_rank(Vu_TOPSIS)) %>%
+          ) |>
+          dplyr::mutate(Vu_TOPSIS = pos_sol / (pos_sol + neg_sol)) |>
+          dplyr::mutate(Vu_rank_TOPSIS = dplyr::dense_rank(Vu_TOPSIS)) |>
           # calculate VU = E*S/(1+AC) (Butt et al 2022)
-          mutate(Vu_prod = E*S/(AC+1)) %>%
-          mutate(Vu_rank_prod = dense_rank(Vu_prod))
+          dplyr::mutate(Vu_prod = E*S/(AC+1)) |>
+          dplyr::mutate(Vu_rank_prod = dplyr::dense_rank(Vu_prod))
         
-        if(summary_method == "sum") out <- compo$Vu_sum 
-        if(summary_method == "rank_sum") out <- compo$Vu_rank_sum 
-        if(summary_method == "TOPSIS") out <- compo$Vu_TOPSIS
-        if(summary_method == "rank_TOPSIS") out <- compo$Vu_rank_TOPSIS
-        if(summary_method == "prod") out <- compo$Vu_prod
-        if(summary_method == "rank_prod") out <- compo$Vu_rank_prod
+        if(summary_method == "sum"){ 
+          out <- compo$Vu_sum
+          out_rank <- compo$Vu_rank_sum}
+        if(summary_method == "TOPSIS"){ 
+          out <- compo$Vu_TOPSIS
+          out_rank <- compo$Vu_rank_TOPSIS}
+        if(summary_method == "prod") {
+          out <- compo$Vu_prod
+          out_rank <- compo$Vu_rank_prod}
         
         if(by_island == TRUE){
           
           results <-
-            data.frame(Island_name = compo$Island_name,
-                       ARCHIP = compo$ARCHIP, 
-                       ULM_ID = compo$ULM_ID, 
-                       VU = unlist(out))
+            data.frame(ID = compo[, isl_col_name],
+                       VU = unlist(out),
+                       VU_rank = unlist(out_rank))
+          colnames(results)[1]<- isl_col_name
           
           results_agg <-
             dplyr::left_join(results,
-                             AC_df[,c("ULM_ID", "sci_name_IUCN", "adaptive_capacity")], 
-                             by = "ULM_ID", "sci_name_IUCN") %>% 
-            dplyr::left_join(S_df[,c("sci_name_IUCN", "sensitivity")], 
-                             by = "sci_name_IUCN") %>% 
-            dplyr::left_join(E_df[,c("ULM_ID", "exposure")], 
-                             by = c("ULM_ID"))
-          
-          results_agg <-
-            results_agg %>% 
-            dplyr::group_by(ULM_ID) %>% 
-            dplyr::summarise(Island_name = unique(Island_name),
-                             ARCHIP = unique(ARCHIP),
-                             VU = unique(VU),
-                             exposure = median(exposure),
-                             sensitivity = median(sensitivity),
-                             adaptive_capacity = median(adaptive_capacity))
-          
-          names(results_agg)[c(5:7)] <- c("E", "S", "AC")
+                             compo[, c(isl_col_name, "E", "S", "AC")],
+                             by = isl_col_name)
           
         } else {
           
           results <-
-            data.frame(Island_name = compo$Island_name,
-                       ARCHIP = compo$ARCHIP, 
-                       ULM_ID = compo$ULM_ID, 
-                       sci_name_IUCN = compo$sci_name_IUCN,
-                       VU = unlist(out))
+            data.frame(ID = compo[, isl_col_name],
+                       sp = compo[, sp_col_name],
+                       VU = unlist(out),
+                       VU_rank = unlist(out_rank))
+          colnames(results)[1:2]<- c(isl_col_name, sp_col_name)
           
           results_agg <-
             dplyr::left_join(results,
-                             E_df[,c("ULM_ID", "exposure")], 
-                             by = "ULM_ID") %>% 
-            dplyr::left_join(S_df[,c("sci_name_IUCN", "sensitivity")], 
-                             by = "sci_name_IUCN") %>% 
-            dplyr::left_join(AC_df[,c("ULM_ID", "sci_name_IUCN", "adaptive_capacity")], 
-                             by = c("ULM_ID", "sci_name_IUCN"))
-          
-          names(results_agg)[c(6:8)] <- c("E", "S", "AC")
+                             E_df[,c(isl_col_name, "exposure")], 
+                             by = isl_col_name) |> 
+            dplyr::left_join(S_df[,c(sp_col_name, "sensitivity")], 
+                             by = sp_col_name) |> 
+            dplyr::left_join(AC_df[,c(isl_col_name, sp_col_name, "adaptive_capacity")], 
+                             by = c(isl_col_name, sp_col_name)) |>
+            dplyr::rename(E = exposure, S = sensitivity, AC = adaptive_capacity)
           
         }
         
@@ -455,30 +488,25 @@ vulnerabilityFUN <-
     if(by_island == TRUE){
       
       out <-
-        Reduce(function(dtf1,dtf2) left_join(dtf1,dtf2,by=c("Island_name",
-                                                            "ARCHIP",
-                                                            "ULM_ID")), 
+        Reduce(function(dtf1,dtf2) dplyr::left_join(dtf1,dtf2,by=isl_col_name), 
                bootstrap_df)
       
       if(n_samples > 1){
-        names(out)[-c(1:3)]<- 
-          paste0(c("VU_","E_", "S_", "AC_"), 
-                 rep(1:n_samples, each = 4))
+        names(out)[-1]<- 
+          paste0(c("VU_", "VUrank_" ,"E_", "S_", "AC_"), 
+                 rep(1:n_samples, each = 5))
       }
       
     } else {
       
       out <-
-        Reduce(function(dtf1,dtf2) left_join(dtf1,dtf2,by=c("Island_name",
-                                                            "ARCHIP",
-                                                            "ULM_ID", 
-                                                            "sci_name_IUCN")), 
+        Reduce(function(dtf1,dtf2) dplyr::left_join(dtf1,dtf2,by=c(isl_col_name, sp_col_name)), 
                bootstrap_df)
       
       if(n_samples > 1){
-        names(out)[-c(1:4)]<- 
-          paste0(c("VU_","E_", "S_", "AC_"), 
-                 rep(1:n_samples, each = 4))
+        names(out)[-c(1,2)]<- 
+          paste0(c("VU_","VUrank_","E_", "S_", "AC_"), 
+                 rep(1:n_samples, each = 5))
       }
       
     }
@@ -486,6 +514,10 @@ vulnerabilityFUN <-
     return(out)
     
   }
+
+
+
+
 
 summary_bootstrap <-
   function(df){
@@ -497,20 +529,17 @@ summary_bootstrap <-
     AC_cols <- names(df)[grep("^AC_", names(df))]
     
     # calculate median and CIs for each set of components
-    df_summary <-
-      lapply(1:nrow(df), function(j){
+    df_summary <- lapply(as.list(1:nrow(df)), function(j){
         
         row <- df[j,]
         
-        VU_values <- row[,names(row) %in% VU_cols] %>% unlist()
-        E_values <- row[,names(row) %in% E_cols] %>% unlist()
-        S_values <- row[,names(row) %in% S_cols] %>% unlist()
-        AC_values <- row[,names(row) %in% AC_cols] %>% unlist()
+        VU_values <- row[,names(row) %in% VU_cols] |> unlist()
+        E_values <- row[,names(row) %in% E_cols] |> unlist()
+        S_values <- row[,names(row) %in% S_cols] |> unlist()
+        AC_values <- row[,names(row) %in% AC_cols] |> unlist()
         
         data.frame(
-          ULM_ID = row$ULM_ID,    
-          Island_name = row$Island_name,
-          ARCHIP = row$ARCHIP,
+          ID = row$ID,
           median_VU = median(VU_values, na.rm = TRUE),
           sd_VU = sd(VU_values, na.rm = TRUE),
           lci_VU = quantile(VU_values, 0.025, na.rm = TRUE),
@@ -528,8 +557,7 @@ summary_bootstrap <-
           lci_AC = quantile(AC_values, 0.025, na.rm = TRUE),
           uci_AC = quantile(AC_values, 0.975, na.rm = TRUE))
         
-      }) %>% 
-      do.call(rbind, .)
+      }) |> dplyr::bind_rows()
     
     df_summary
     

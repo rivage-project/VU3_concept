@@ -1,0 +1,511 @@
+---
+title: "Tutorial for vulnerability calculation (6 archipelagos)"
+author: "Clara Marino"
+date: "2024-12-20"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Set up
+
+### Load packages
+Note that all scripts use the native R pipe to not attach dplyr and tidyverse packages. 
+
+```{r, message=FALSE, warning=FALSE}
+# clean working environment
+rm(list=ls())
+#load the only attached package
+library(ggplot2)
+```
+
+### Set colors of archipelagos for the plots
+```{r}
+# set colors
+archip_col <-  c(
+  "Galapagos Islands" = "#4DAF4A",
+  "Canary Islands" = "#377EB8",
+  "Azores"="#FF7F00", 
+  "Mascarene Islands" = "#984EA3",
+  "Hawaii" = "#E41A1C",
+  "Tristan da Cunha Islands" = "#B15928")
+```
+
+### Load custom functions
+
+Custom functions were designed to compute E, S, AC, and final VU based on previously collected markers. They are not yet properly documented and have a lot of parameters by default adapted to this study, but they can be used for any studies that would aim as computing VU based on multiple components. The normalization method of the markers, the markers to include, as well as the final method of calculation of VU can be modified.
+
+
+```{r}
+source("R/Calculate_components_VU_FUN.R")
+```
+
+### Load data 
+
+```{r}
+# load data frame in final format
+data_all <- readRDS("outputs/30_all_VU_components_45_isl_266_BM_sp.rds")
+# load island information and polygons
+isl <- readRDS("data/derived-data/01_shp_45_major_isl_clean.rds")
+
+str(data_all)
+```
+
+Data for VU analyses is a data frame with rows representing a species (column _sci_name_) on an island (identified by  _ID_ and _Island_ columns) and columns are variables.
+Some variables are at the island level: _ID_, _Archip_, _Island_, _Area_, _max_elev_, _mean_tri_, _PA_prop_, _mean_HM_change_, _rdens_osm_, _sed_tot_med_, _sed_pr_isl_med_, _sed_tas_isl_med_, _nb_alien_, _alien_vert_cover_, _nb_sp_, _nb_fe_, _fred_, _fored_, _fvuln_.
+Some variables are at the species level: _sci_name_, _Class_, _nb_hab_, _nb_diet_, _aoh_km2_, _gen_length_y_, _dispersal_.
+
+In this dataset, we have a total of 266 species (240 birds and 26 mammals) that occurred across 45 islands of 6 archipelagos (`r unique(data_all$Archip)`), for a total of `r nrow(data_all)` occurrences.
+
+
+# Calculate Vulnerability
+
+Using default settings: normalization is "minmax", calculation method is "sum" (VU = E+S-AC), indexes calculated per species/island. The output will a data frame with rows representing a species (column _sci_name_) on an island (colum _ID_ ). Variables are:
+
+* VU: Vulnerability computed following the calculation method, here VU = E + S - AC, for each species on each island. A species can have a high VU on a given island because E is high and AC is low, while th VU can be lower on another island if E is low and AC high (for the same set of traits).
+* VU_rank: the rank of the VU value (1 = lowest VU, 1362 = highest VU)
+* E: Exposure, calculated at the island level. E is duplicated for all species from the same island.
+* S: Sensitivity, calculated at the species level. S is duplicated for all islands where a species occur.
+* AC: Adaptive capacity, calculated at the island and species level. AC contains biotic markers at the species and community (i.e., island) levels, and abiotic markers at the island level. Thus, final AC integrates both species and island levels.
+
+```{r}
+# vulnerability
+VU_sp_isl <- vulnerabilityFUN(data_all)
+head(VU_sp_isl)
+
+```
+
+The default settings are per species/island. If you want just per island, you can set `by_island` to `TRUE`
+
+```{r}
+VU_isl <- vulnerabilityFUN(data_all, by_island = T)
+head(VU_isl)
+```
+
+You can calculate VU for birds or mammals separated, and look at the final ranking of islands based on VU value. 
+
+```{r}
+VU_mam_isl <- vulnerabilityFUN(data_all |> dplyr::filter(Class=="Mammalia"), by_island = T)
+VU_bird_isl <- vulnerabilityFUN(data_all |> dplyr::filter(Class=="Aves"), by_island = T)
+
+# combine bird and mammal VU by island to compare final ranking
+colnames(VU_mam_isl)[-1] <- paste0(colnames(VU_mam_isl)[-1], "_mam")
+colnames(VU_bird_isl)[-1] <- paste0(colnames(VU_bird_isl)[-1], "_bird")
+comp_BM <- dplyr::left_join(VU_mam_isl, VU_bird_isl, by = "ID") |>
+  # add archipelago information
+  dplyr::left_join(data_all|> dplyr::distinct(ID, Archip), by = "ID")
+
+# plot the rankings for both groups
+ggplot(comp_BM)+
+  geom_abline(slope = 1, intercept = 0, col="grey50", lty = 2)+
+  geom_line(aes(x= VU_rank_mam, y = VU_rank_bird), col = "grey30")+
+  geom_point(aes(x= VU_rank_mam, y = VU_rank_bird, color = Archip), size = 2)+
+  scale_color_manual(values = archip_col)+
+  xlab("Rank of VU for mammals")+
+  ylab("Rank of VU for birds") + theme_bw()
+  
+
+```
+The final ranking is quite similar between the groups, but Hawai'i and Canary islands have a higher VU ranking for birds than for mammals, while Mascarene islands are ranked more vulnerable for mammals than for birds.
+
+
+## Plot results for VU
+
+### Distribution of VU values within each island
+
+```{r}
+# join VU data with island information
+VU_sp_isl_info <- dplyr::left_join(
+  isl |> sf::st_drop_geometry() |> dplyr::select(ID, Archip, Island),
+  VU_sp_isl
+)
+
+# create a ranking to make sure islands of each archipelago are together in the graph
+arch_isl <- paste0(isl$Archip, isl$Island)
+archip_order <- isl$Island[match(sort(arch_isl), arch_isl)] |> unique() 
+VU_sp_isl_info$Island <- factor(VU_sp_isl_info$Island, levels = archip_order)
+
+# calculate mean, median and sd value per island
+VU_median_mean <- 
+  VU_sp_isl_info |> 
+  dplyr::group_by(Archip, Island) |> 
+  dplyr::summarise(
+    Median = median(VU),
+    Mean = mean(VU),
+    SD = sd(VU)) |> dplyr::ungroup()
+isl_order <- VU_median_mean$Island[match(sort(VU_median_mean$Mean), VU_median_mean$Mean)]
+VU_median_mean$Island_order <- factor(VU_median_mean$Island, levels = isl_order)
+VU_sp_isl_info$Island_order <- factor(VU_sp_isl_info$Island, levels = isl_order)
+
+
+# plot distribution of VU values within each island 
+ggplot(VU_sp_isl_info, aes(VU)) +
+  geom_histogram(aes(fill=Archip), col= NA, bins = 15) +
+  scale_fill_manual(values = archip_col) +
+  facet_wrap(~Island) +  
+  geom_segment(data=VU_median_mean,
+               aes(x = Median, xend=Median, y=0, yend=20), col='grey50') +
+  geom_segment(data=VU_median_mean,
+               aes(x = Mean, xend=Mean, y=0, yend=20), col='blue') +
+  theme_bw() + ylab("Number of species")+ xlab("Vulnerability value")+
+  theme(legend.position = "none")
+
+```
+**Supplementary figure XX.** Distribution of vulnerability values for all species in each islands, colored by archipelago. Blue and grey bars represent the mean and the median values of the distribution, respectively. 
+
+
+
+To show these in an aggregated manner, we can plot each island as a ro, rank the islands bu VU value, and still plot the species variability with lighter grey dots.
+
+```{r, echo=FALSE}
+
+ggplot() +
+  geom_point(data = VU_sp_isl_info, aes(x = VU, y = Island_order),
+             col = "grey", alpha = .2)+
+  geom_point(data = as.data.frame(VU_median_mean), 
+             aes(x=Mean, y=Island, col=Archip), size = 2) +
+  geom_errorbar(data = as.data.frame(VU_median_mean), 
+                aes(x=Mean, xmin=Mean-SD, xmax=Mean+SD, y=Island_order, col=Archip)) +
+  theme_bw() +
+  ggtitle('Vulnerability') +
+  xlab('Vulnerability per species per island (Mean +/- SD)') +
+  scale_color_manual("Archipelago", values = archip_col) +
+  theme(legend.position = "right") +
+  ylab('Island name')
+```
+
+**Figure XX.** Final vulnerability of the 45 islands from the six archipelagos for birds and mammals. Each raw represents an island, colors depict archipelagos and islands are ordered in decreasing order of vulnerability. Colored points and associated error bars represent the mean and the standard deviation of the VU of each island assemblage. Grey points represent individual values of VU per species per island.
+
+
+### Map VU across archipelagos
+
+The final figure will be done with the position of each archipelago on a global map, this is just to give a first idea of the spatial variation per archipelago.
+
+Global map
+
+```{r, echo=FALSE, message=FALSE}
+world <- map_data("world")
+ggplot(world)+
+  geom_map(data = world, map = world,
+  aes(long, lat, map_id = region),
+  color = NA, fill = "grey70") + theme_void()
+
+```
+
+Add the archipelagos
+
+```{r, echo=FALSE, message=FALSE}
+# prepare database
+shp_vu <- dplyr::left_join(isl, VU_median_mean)|>sf::st_as_sf()
+min_vu = min(shp_vu$Mean)
+max_vu = max(shp_vu$Mean)
+
+# plot each archipelago
+a <- ggplot(shp_vu |> dplyr::filter(Archip=="Azores"))+
+    geom_sf(aes(fill=Mean), color = "grey70")+
+    scale_fill_gradientn(colors = viridis::viridis_pal(option = "H")(7), 
+                         limits=c(min_vu, max_vu), 
+                         na.value = "grey70")+ 
+    ggsn::blank() +
+    ggsn::north(shp_vu |> dplyr::filter(Archip=="Azores"), symbol = 10) +
+    ggsn::scalebar(shp_vu |> dplyr::filter(Archip=="Azores"), dist = 100, dist_unit = "km",
+                   transform = TRUE, model = "WGS84", location = "bottomleft", 
+                   st.dist = .05, border.size = .5, st.bottom = F)+
+    theme(panel.background = element_rect(fill = "white", colour = "grey50"),
+          panel.grid.major = element_line(colour = "lightgrey"))
+  
+  c <- ggplot(shp_vu |> dplyr::filter(Archip=="Canary Islands"))+
+    geom_sf(aes(fill=Mean), color = "grey70")+ 
+    scale_fill_gradientn(colors = viridis::viridis_pal(option = "H")(7), 
+                         limits=c(min_vu, max_vu), 
+                         na.value = "grey70")+ 
+    ggsn::blank() +
+    ggsn::scalebar(shp_vu |> dplyr::filter(Archip=="Canary Islands"), dist = 100, dist_unit = "km",
+                   transform = TRUE, model = "WGS84", 
+                   location = "topleft", st.dist = .06, border.size = .5, st.bottom = F)+
+    theme(panel.background = element_rect(fill ="white", colour = "grey50"),
+          panel.grid.major = element_line(colour = "lightgrey"))
+  
+  g <- ggplot(shp_vu |> dplyr::filter(Archip=="Galapagos Islands"))+
+    geom_sf(aes(fill=Mean), color = "grey70")+
+    scale_fill_gradientn(colors = viridis::viridis_pal(option = "H")(7), 
+                         limits=c(min_vu, max_vu), 
+                         na.value = "grey70")+ 
+    ggsn::blank() +
+    ggsn::scalebar(shp_vu |> dplyr::filter(Archip=="Galapagos Islands"), dist = 100, dist_unit = "km",
+                   transform = TRUE, model = "WGS84", 
+                   location = "topright", st.dist = .04, border.size = .5, st.bottom = F)+
+    theme(panel.background = element_rect(fill ="white", colour = "grey50"),
+          panel.grid.major = element_line(colour = "lightgrey"))
+  
+  h <- ggplot(shp_vu |> dplyr::filter(Archip=="Hawaii"))+
+    geom_sf(aes(fill=Mean), color = "grey70")+
+    scale_fill_gradientn(colors = viridis::viridis_pal(option = "H")(7), 
+                         limits=c(min_vu, max_vu), 
+                         na.value = "grey70")+ 
+    ggsn::blank() +
+    ggsn::scalebar(shp_vu |> dplyr::filter(Archip=="Hawaii"), dist = 100, dist_unit = "km",
+                   transform = TRUE, model = "WGS84", 
+                   location = "bottomleft", st.dist = .04, border.size = .5, st.bottom = F)+
+    theme(panel.background = element_rect(fill = "white", colour = "grey50"),
+          panel.grid.major = element_line(colour = "lightgrey"))
+  
+  m <- ggplot(shp_vu |> dplyr::filter(Archip=="Mascarene Islands"))+
+    geom_sf(aes(fill=Mean), color = "grey70")+
+    scale_fill_gradientn(colors = viridis::viridis_pal(option = "H")(7), 
+                         limits=c(min_vu, max_vu), 
+                         na.value = "grey70")+
+    ggsn::scalebar(shp_vu |> dplyr::filter(Archip=="Mascarene Islands"), dist = 100, dist_unit = "km",
+                   transform = TRUE, model = "WGS84", location = "bottomright", 
+                   height = .05, st.dist = .06, border.size = .5, st.bottom = F)+
+    ggsn::blank()+
+    theme(panel.background = element_rect(fill = "white", colour = "grey50"),
+          panel.grid.major = element_line(colour = "lightgrey"))
+  
+  t <- ggplot(shp_vu |> dplyr::filter(Archip=="Tristan da Cunha Islands"))+
+    geom_sf(aes(fill=Mean), color = "grey70")+
+    scale_fill_gradientn(colors = viridis::viridis_pal(option = "H")(7), 
+                         limits=c(min_vu, max_vu), 
+                         na.value = "grey70")+ 
+    ggsn::blank() +
+    ggsn::scalebar(shp_vu |> dplyr::filter(Archip=="Tristan da Cunha Islands"), dist = 10, dist_unit = "km",
+                   transform = TRUE, model = "WGS84", 
+                   location = "topleft", st.dist = .04, border.size = .5, st.bottom = F)+
+    theme(panel.background = element_rect(fill ="white", colour = "grey50"),
+          panel.grid.major = element_line(colour = "lightgrey"))
+```
+
+```{r, echo=FALSE, message=FALSE}
+a + ggtitle("Azores")
+
+c + ggtitle("Canary islands")
+
+g + ggtitle("Galapagos islands")
+
+h + ggtitle("Hawai`i")
+
+m + ggtitle("Mascarenes")
+
+t + ggtitle("Tristan da Cunha")
+```
+
+
+# Calculate E, S, and AC
+
+## Exposure
+
+Exposure is calculated at the island level. The output contains: 
+
+* island identifier ( _ID_ column)
+* normalized markers for each threat;
+* normalized LU, CC, or IAS threat (LU = mean_HM_change + rdens_osm; CC = sed_tot_med; IAS = nb_alien + alien_vert_cover);
+* final exposure (E = LU + CC + IAS), also normalized between 0 and 1. 
+
+```{r}
+# get exposure
+E_all <- exposureFUN(data_all)
+head(E_all)
+
+```
+
+### Relationships between exposure components
+
+#### Correlation between threat markers
+
+```{r}
+E_markers_corr <- cor(E_all |> dplyr::select(-c(ID, lu, cc, ias)))
+corrplot::corrplot(E_markers_corr, method = "number")
+```
+
+At first sight, all markers contribute quite evenly to final exposure. The two markers of LU are positively correlated between each other, and also positively correlated with the percentage of alien vertebrate coverage. Climate change marker (which is the combination of precipitation and temperature change but computed following Williams et al (2007), thus aggregated together) is positively correlated with the number of alien species.
+
+#### Correlation between threats and final exposure
+
+```{r}
+E_all_corr <- cor(E_all[,c("exposure", "lu", "cc", "ias")])
+corrplot::corrplot(E_all_corr, method = "number")
+```
+
+Final exposure is positively linked to all threats, but super correlated with IAS threat. Possibly because this threat has many low values but also many intermediate to high values, in contrast with CC an LU that have both a distribution with many low values but few with intermediate to high. Can be visualized with histograms:
+
+```{r, echo = FALSE}
+ias <- ggplot(E_all)+
+  geom_histogram(aes(x = ias), bins = 10, fill = "green4", col = NA)+
+  xlab("Biological invasions value")+
+  ylab("Number of islands") + theme_bw()
+lu <- ggplot(E_all)+
+  geom_histogram(aes(x = lu), bins = 10, fill = "blue3", col = NA)+
+  xlab("Land-use change value")+
+  ylab("Number of islands") + theme_bw()
+cc <- ggplot(E_all)+
+  geom_histogram(aes(x = cc), bins = 10, fill = "red3", col = NA)+
+  xlab("Climate change value")+
+  ylab("Number of islands") + theme_bw()
+exp <- ggplot(E_all)+
+  geom_histogram(aes(x = exposure), bins = 10, fill = "grey30", col = NA)+
+  xlab("Exposure value")+
+  ylab("Number of islands") + theme_bw()
+
+ggpubr::ggarrange(ias, lu, cc, exp, nrow=2, ncol = 2)
+
+```
+
+### Potential figure for the paper: relationships between threats
+
+```{r, echo = FALSE}
+E_area <- isl |> 
+  dplyr::mutate(Area = sf::st_area(geometry))|>
+  dplyr::mutate(Area_km2 = units::drop_units(Area)/1000000)|>
+  sf::st_as_sf() |> sf::st_drop_geometry() |>
+  dplyr::select(ID, Archip, Area_km2)|>
+  dplyr::left_join(E_all, by ="ID")
+
+# lu and cc
+lc <- ggplot(E_area)+
+  geom_hline(yintercept = .5, lty = 2, color = "grey")+
+  geom_vline(xintercept = .5, lty = 2, color = "grey")+
+  geom_point(aes(x=lu, y = cc, size = Area_km2, color = Archip), 
+             position = 'jitter', alpha = .6)+
+  xlab("Land-use change")+ylab("Climate change")+
+  scale_color_manual(values = archip_col)+
+  theme_classic()
+
+# lu and ias
+li <- ggplot(E_area)+
+  geom_hline(yintercept = .5, lty = 2, color = "grey")+
+  geom_vline(xintercept = .5, lty = 2, color = "grey")+
+  geom_point(aes(x=lu, y = ias, size = Area_km2, color = Archip), 
+             position = 'jitter', alpha = .5)+
+  xlab("Land-use change")+ylab("Biological invasions")+
+  scale_color_manual(values = archip_col)+
+  theme_classic()
+
+# cc and ias
+ci <- ggplot(E_area)+
+  geom_hline(yintercept = .5, lty = 2, color = "grey")+
+  geom_vline(xintercept = .5, lty = 2, color = "grey")+
+  geom_point(aes(x=ias, y = cc, size = Area_km2, color = Archip), 
+             position = 'jitter', alpha = .5)+
+  xlab("Biological invasions")+ylab("Climate change")+
+  scale_color_manual(values = archip_col)+
+  theme_classic()
+
+ggpubr::ggarrange(lc, li, ci, nrow=2, ncol = 2, common.legend = T, legend = "right")
+
+
+```
+
+**Figure X.** Relationship between exposure components: climate change, land-use change, and biological invasions.  
+
+We still observe the fact that across this archipelagos, no islands are highly exposed to both CC and LUC. However, biological invasions are positively associated with the two other threats. We also notice a strong archipelago effect for climate change (expected given that islands from an archipelago have similar climatic conditions), although Hawai`i islands have broader differences than other archipelagos in CC exposure. For LUC, half of the archipelagos have very similar values (Galapagos, Hawaii, Tristan da Cunha) whereas the others harbor a large range of LUC values (Canary, Azores, Mascarenes), with islands poorly vs. highly exposed to LUC. For biological invasions, except for Tristan da Cunha (very small values), all archipelagos have a wide range of values, even Galapagos, which makes the islands different from each other in final exposure, even within an archipelago.
+
+
+## Sensitivity
+
+Sensitivity is calculated at the species level. The output contains: 
+
+* species identifier ( _sci_name_);
+* 4 normalized traits
+* final sensitivity (S = gen_length_y + (1-AoH_km2) + (1-nb_diet) + (1-nb_hab)), also normalized between 0 and 1. 
+
+Some traits are inversely correlated with their sensitivity, this needs to be set using the argument `inv_variables`. For example, size of AoH (km²) is used to calculate sensitivity, but the larger the AoH, the smaller the sensitivity.
+
+```{r}
+# get sensitivity
+S_all <- sensitivityFUN(data_all, 
+                        sens_cols = c("aoh_km2", "nb_diet", "nb_hab", "gen_length_y"),
+                        inv_variables = c("aoh_km2", "nb_hab", "nb_diet"),
+                        sp_col_name = "sci_name",
+                        isl_col_name = "ID",
+                        norm = "minmax")
+head(S_all)
+
+```
+
+## Adaptive capacity
+
+Adaptive capacity is calculated at the species per island level. The output contains: 
+
+* the island identifier ( _ID_ );
+* species identifier ( _sci_name_);
+* normalized abiotic components and the functional redundancy (at the island level);
+* normalized trait for species dispersal;
+* normalized intermediate components of AC: 
+  * AC_biotic = dispersal + fred; 
+  * AC_abiotic = Area + max_elev + mean_tri + PA_prop;
+* final AC (AC = AC_biotic + AC_abiotic), normalized between 0 and 1.
+
+```{r}
+# get AC
+AC_all <- adaptive_capacityFUN(data_all)
+head(AC_all)
+```
+
+
+
+## Parallel plots of components
+
+As birds and mammals are grouped for the final vulnerability, we can plot only one map (and possibly put in Supplementary the plot for birds only and mammals only).
+
+### Create the data frame
+
+We need a data frame with one value per island for each metric, and the final VU to color the lines. Thus, we aggregated all metrics as the mean of all species on each island. Note that for markers at the island level, it is equivalent to the raw value.
+
+```{r}
+metrics <- VU_sp_isl_info |> dplyr::select(ID, Archip, sci_name, VU) |>
+  # add exposure metrics
+  dplyr::left_join(E_all |> dplyr::select(ID, mean_HM_change:alien_vert_cover), by ="ID") |> 
+  # add sensitivity metrics
+  dplyr::left_join(S_all |> # invert the 'generalist' variables to 'specialist' ones
+                     dplyr::mutate(AoH_specialist = 1-aoh_km2,
+                                   Diet_specialist = 1-nb_diet,
+                                   Habitat_specialist = 1-nb_hab)|>
+                     dplyr::select(sci_name, gen_length_y, AoH_specialist:Habitat_specialist), 
+                   by ="sci_name") |>
+  # add ac metrics
+  dplyr::left_join(AC_all |> dplyr::select(ID, sci_name, dispersal, fred, Area, max_elev, mean_tri, PA_prop), 
+                   by =c("ID", "sci_name")) |> 
+  dplyr::group_by(Archip, ID) |>
+  dplyr::summarise_if(is.numeric, mean) |> dplyr::ungroup()
+
+```
+
+### Parallel coordinate plot
+
+Each island is represented by a line, with points representing the value of each individual metric.
+
+
+```{r, echo=FALSE, message=FALSE}
+# function for plotting parallel plots 
+plot.par.coord <- function(metrics){
+  GGally::ggparcoord(data = metrics,
+                   columns = 4:ncol(metrics), 
+                   scale="globalminmax",
+                   groupColumn = 3, 
+                   showPoints = TRUE,
+                   order = c(4:ncol(metrics)),
+                   alphaLines = 0.3) +
+    viridis::scale_color_viridis()+
+    theme_bw()+
+    facet_wrap(~Archip, nrow = 3, ncol = 2)+
+    theme(axis.text.x = element_text(angle = 90),
+        legend.position = "none",
+        strip.background = element_rect(colour="grey30",fill= NA))+
+    labs(facet=unique(metrics$Archip))
+  }
+
+# new names for metrics
+newnames <- c("Archip","ID", "VU", "E_LU_modif_change", "E_LU_road_density", "E_CC_temp_precip", "E_BI_alien_richness", "E_BI_alien_cover", "S_generation_length", "S_AoH_specialist", "S_Diet_spe", "S_habitat_spe", "ACb_dispersal_ability", "ACb_funct_redundancy", "ACa_area", "ACa_elevation","ACa_terrain_ruggedness", "ACa_protected_areas")
+
+names(metrics) = newnames
+
+plot.par.coord(metrics)
+
+```
+
+The color gradient represents the vulnerability value for each island from dark colors = low VU to yellow colors = high VU. Facets represents archipelagos, ordered as (`r unique(data_all$Archip)`). 
+

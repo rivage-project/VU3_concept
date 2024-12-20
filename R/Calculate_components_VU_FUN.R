@@ -1,5 +1,5 @@
 # Functions for calculating VU
-
+# (c) Clara Marino, Gabriel Caetano, Adrienne Etard, Pierre Denelle
 
 #' Normalize components
 #' 

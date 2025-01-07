@@ -3,7 +3,6 @@ title: "Tutorial for vulnerability calculation (6 archipelagos)"
 author: "Clara Marino"
 date: "2024-12-20"
 output:
-  pdf_document: default
   html_document: default
 ---
 
@@ -159,7 +158,7 @@ ggplot(VU_sp_isl_info, aes(VU)) +
 
 
 
-To show these in an aggregated manner, we can plot each island as a ro, rank the islands bu VU value, and still plot the species variability with lighter grey dots.
+To show these in an aggregated manner, we can plot each island as a row, rank the islands bu VU value, and still plot the species variability with lighter grey dots.
 
 ```{r, echo=FALSE}
 
@@ -200,7 +199,7 @@ Add the archipelagos
 
 ```{r, echo=FALSE, message=FALSE}
 # prepare database
-shp_vu <- dplyr::left_join(isl, VU_median_mean)|>sf::st_as_sf()
+shp_vu <- dplyr::left_join(isl, VU_median_mean)|> sf::st_as_sf()
 min_vu = min(shp_vu$Mean)
 max_vu = max(shp_vu$Mean)
 
@@ -291,6 +290,30 @@ h + ggtitle("Hawai`i")
 m + ggtitle("Mascarenes")
 
 t + ggtitle("Tristan da Cunha")
+```
+
+Check the relationship between VU and latitude/ longitude
+
+```{r}
+ggplot(shp_vu)+
+  geom_vline(xintercept = 0, color = "grey20", lty=2)+
+  geom_point(aes(x=Lat, y = Mean, col = Archip))+
+  scale_color_manual(values = archip_col)+
+  theme_bw()+ xlab("Latitude") + ylab("Vulnerability")
+
+ggplot(shp_vu)+
+  #geom_vline(xintercept = 0, color = "grey20", lty=2)+
+  geom_point(aes(x=Long, y = Mean, col = Archip))+
+  scale_color_manual(values = archip_col)+
+  theme_bw()+ xlab("Longitude") + ylab("Vulnerability")
+
+
+ggplot(shp_vu)+
+  #geom_vline(xintercept = 0, color = "grey20", lty=2)+
+  geom_point(aes(x=Long, y = Lat, col = Archip, size = Mean), shape = 1)+
+  scale_color_manual(values = archip_col)+
+  theme_bw()+ xlab("Longitude") + ylab("Latitude")
+
 ```
 
 
@@ -426,6 +449,14 @@ head(S_all)
 
 ```
 
+Relationship between Sensitivity markers
+```{r}
+S_markers_corr <- cor(S_all |> dplyr::select(-sci_name))
+corrplot::corrplot(S_markers_corr, method = "number")
+
+```
+
+
 ## Adaptive capacity
 
 Adaptive capacity is calculated at the species per island level. The output contains: 
@@ -445,7 +476,12 @@ AC_all <- adaptive_capacityFUN(data_all)
 head(AC_all)
 ```
 
+Relationships between AC markers
+```{r}
+AC_markers_corr <- cor(AC_all |> dplyr::select(-c(sci_name, ID)))
+corrplot::corrplot(AC_markers_corr, method = "circle")
 
+```
 
 ## Parallel plots of components
 

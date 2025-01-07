@@ -542,10 +542,13 @@ saveRDS(expo_ias, "data/derived-data/22_IAS_exposure_45_isl.rds")
 #############
 
 # plot simple relationships
+expo_ias <- readRDS("data/derived-data/22_IAS_exposure_45_isl.rds")
+
+expo_ias <- dplyr::left_join(expo_ias, isl |> dplyr::select(ID, Archip))
 
 # alien plants vs alien vertebrates
 ggplot(expo_ias) +
-  geom_point(aes(x=nb_alien_vert, y= nb_alien_plant, color = ARCHIP), 
+  geom_point(aes(x=nb_alien, y= alien_vert_cover, color = Archip), 
              alpha = .5, size = 3)
 
 # alien birds vs alien mammals

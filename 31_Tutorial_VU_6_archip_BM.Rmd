@@ -297,9 +297,9 @@ Check the relationship between VU and latitude/ longitude
 ```{r}
 ggplot(shp_vu)+
   geom_vline(xintercept = 0, color = "grey20", lty=2)+
-  geom_point(aes(x=Lat, y = Mean, col = Archip))+
+  geom_point(aes(x=abs(Lat), y = Mean, col = Archip))+
   scale_color_manual(values = archip_col)+
-  theme_bw()+ xlab("Latitude") + ylab("Vulnerability")
+  theme_bw()+ xlab("Absolute latitude") + ylab("Vulnerability")
 
 ggplot(shp_vu)+
   #geom_vline(xintercept = 0, color = "grey20", lty=2)+
@@ -540,6 +540,10 @@ newnames <- c("Archip","ID", "VU", "E_LU_modif_change", "E_LU_road_density", "E_
 names(metrics) = newnames
 
 plot.par.coord(metrics)
+
+pdf("figures/31_parallel_plot.pdf",8,8)
+plot.par.coord(metrics)
+dev.off()
 
 ```
 

@@ -85,6 +85,10 @@ SR <- bird_ckl_ABCD |>
   dplyr::group_by(ULM_ID) |>
   dplyr::summarise(SR = dplyr::n())
 
+# count number of species in total before cleaning
+length(unique(bird_ckl_ABCD$sci_name))
+# and number of occurrences on islands
+nrow(bird_ckl_ABCD |> dplyr::distinct(sci_name, ULM_ID))
 
 # check if all species are extant
 
@@ -242,24 +246,31 @@ length(unique(bckl_clean$sci_name))
 colSums(is.na(bckl_clean))
 
 table(bckl$Archip)
-
+table(bckl_clean$Archip)
 
 sr <- bckl_clean |>
   dplyr::select(Archip, Island, sci_name) |>
   dplyr::group_by(Archip, Island) |>
   dplyr::summarise(SR_current = dplyr::n())
 
-ckl_before <- readRDS("data/derived-data/12_bird_ckl_islands_clean.RDS")
+ckl_before <- readRDS("data/derived-data/02_bird_ckl_45_isl_ABCD.rds")
 sp_before <- ckl_before |>
-  dplyr::group_by(ULM_ID, Island_name)|>
-  dplyr::summarise(SR_before = dplyr::n()) |>
-  dplyr::rename(Island = Island_name)
+  dplyr::group_by(ULM_ID)|>
+  dplyr::summarise(SR_before = dplyr::n())
 
 compa <- dplyr::left_join(sr, sp_before)
 
 ggplot(compa, aes(x = SR_before, y = SR_current, color = Archip))+
   geom_point()
 # better after the cleaning!
+
+# nb of sp per archip
+# before
+bckl |> dplyr::distinct(Archip, sci_name)|>
+  dplyr::group_by(Archip)|> dplyr::count()
+# after
+bckl_clean |> dplyr::distinct(Archip, sci_name)|>
+  dplyr::group_by(Archip)|> dplyr::count()
 
 # save clean checklist
 

@@ -349,6 +349,10 @@ names(occ_archip) <- names(wkt)
 
 saveRDS(occ_archip, "data/raw-data/alien_species/gbif_occ/22_metadata_GBIF_6_archip.rds")
 
+# get gbif metadata
+meta <- readRDS("data/raw-data/alien_species/gbif_occ/22_metadata_GBIF_6_archip.rds")
+
+lapply(meta, function(x){x$doi})
 
 # once all downloads are ready, get the .csv files 
 for (i in 1:length(occ_archip)){

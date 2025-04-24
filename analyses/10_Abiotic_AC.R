@@ -14,7 +14,7 @@ isl <- readRDS("data/derived-data/01_shp_45_major_isl.rds")
 zfiles <- list.files("data/raw-data/elevation")[grepl(".zip", list.files("data/raw-data/elevation"))]
 dat <- data.frame()
 for(i in zfiles){
-  i="S60W030.zip"
+  #i="S60W030.zip"
   
   # read elevation file
   elev <- terra::rast(unzip(paste0("data/raw-data/elevation/", i)))
@@ -44,6 +44,7 @@ dat_isl <- dat |>
     mean_tpi = mean(TPI, na.rm = T),
     sd_tpi = sd(TPI, na.rm = T),
     mean_tri = mean(TRI, na.rm = T),
+    med_tri = median(TRI, na.rm = T),
     sd_tri = sd(TRI, na.rm = T)
   )
 
@@ -58,7 +59,7 @@ tp <- dplyr::left_join(isl, dat_isl)
 
 library(ggplot2)
 ggplot(tp)+
-  geom_point(aes(x=mean_tpi, y=mean_tri, color = Archip),
+  geom_point(aes(x=med_tri, y=mean_tri, color = Archip),
              size = 3, alpha =.5)
 ggplot(tp)+
   geom_point(aes(x=sd_tpi, y=sd_tri, color = Archip),
@@ -190,7 +191,7 @@ ac <- dplyr::left_join(isl, dplyr::left_join(elev_tri, prop_pa |> dplyr::select(
   dplyr::mutate(Area = round(units::set_units(sf::st_area(geometry), km^2), 2)) |>
   units::drop_units() |>
   sf::st_as_sf() |> sf::st_drop_geometry() |>
-  dplyr::select(ID, Archip, Island, Area, max_elev, mean_tri, PA_prop)
+  dplyr::select(ID, Archip, Island, Area, max_elev, med_tri, PA_prop)
   
 
 

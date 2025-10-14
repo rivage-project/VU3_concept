@@ -1,0 +1,10 @@
+name: rivage_app
+title: rivage_app
+username: gabrielhoc
+account: gabrielhoc
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 15118120
+bundleId: 10684931
+url: https://gabrielhoc.shinyapps.io/rivage_app/
+version: 1

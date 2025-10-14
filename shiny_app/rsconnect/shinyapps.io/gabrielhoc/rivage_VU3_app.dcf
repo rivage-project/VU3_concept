@@ -1,0 +1,12 @@
+name: rivage_VU3_app
+title: rivage_VU3_app
+username: gabrielhoc
+account: gabrielhoc
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 15130472
+bundleId: 10684959
+url: https://gabrielhoc.shinyapps.io/rivage_VU3_app/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE

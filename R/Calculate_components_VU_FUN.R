@@ -355,6 +355,17 @@ vulnerabilityFUN <-
            by_island = FALSE,
            inv_variables = c("aoh_km2", "nb_hab", "nb_diet")){
     
+    # to allow marker bootstrapping:
+    lu_cols <- lu_cols[lu_cols %in% colnames(df)]
+    cc_cols <- cc_cols[cc_cols %in% colnames(df)]
+    ias_cols <- ias_cols[ias_cols %in% colnames(df)]
+    sens_cols <- sens_cols[sens_cols %in% colnames(df)]
+    ac_biotic_cols <- ac_biotic_cols[ac_biotic_cols %in% colnames(df)]
+    ac_abiotic_cols <- ac_abiotic_cols[ac_abiotic_cols %in% colnames(df)]
+    ac_sp_cols <- ac_sp_cols[ac_sp_cols %in% colnames(df)]
+    ac_isl_cols <- ac_isl_cols[ac_isl_cols %in% colnames(df)]
+    
+    
     bootstrap_df <-
       pbapply::pblapply(1:n_samples, function(i){
         
@@ -459,6 +470,7 @@ vulnerabilityFUN <-
             dplyr::left_join(results,
                              compo[, c(isl_col_name, "E", "S", "AC")],
                              by = isl_col_name)
+          results_all <- results_agg
           
         } else {
           
@@ -479,9 +491,14 @@ vulnerabilityFUN <-
                              by = c(isl_col_name, sp_col_name)) |>
             dplyr::rename(E = exposure, S = sensitivity, AC = adaptive_capacity)
           
+          #to have all the species per island in the end
+          results_all <- dplyr::left_join(df[,c(isl_col_name, sp_col_name)], 
+                                          results_agg, 
+                                          by=c(isl_col_name, sp_col_name))
+          
         }
         
-        return(results_agg)
+        return(results_all)
         
       })
     
@@ -563,4 +580,35 @@ summary_bootstrap <-
     
   }
 
+summary_bootstrap_sp_isl <-
+  function(df){
+    
+    df_lg <- tidyr::pivot_longer(df, cols = VU_1:AC_100) |>
+      tidyr::separate(name, into=c("name", "num"), sep="_") 
+    df_wd <- tidyr::pivot_wider(df_lg, names_from=name, values_from=value) |>
+      dplyr::filter(!is.na(VU))
+    
+    df_agg <- df_wd |>
+      dplyr::group_by(ID)|>
+      dplyr::summarise(
+        median_VU = median(VU),
+        sd_VU = sd(VU),
+        lci_VU = quantile(VU, 0.025),
+        uci_VU = quantile(VU, 0.975),
+        median_E = median(E),
+        sd_E = sd(E),
+        lci_E = quantile(E, 0.025),
+        uci_E = quantile(E, 0.975),
+        median_S = median(S),
+        sd_S = sd(S),
+        lci_S = quantile(S, 0.025),
+        uci_S = quantile(S, 0.975),
+        median_AC = median(AC),
+        sd_AC = sd(AC),
+        lci_AC = quantile(AC, 0.025),
+        uci_AC = quantile(AC, 0.975))
+    
+    df_agg
+    
+  }
 

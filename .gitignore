@@ -23,7 +23,8 @@ man/
 NAMESPACE
 analyses/ignore_repo/
 figures/
-data/raw-data/
+data/
+shiny_app/
 31_Tutorial_VU_6_archip_BM.html
 31_Tutorial_VU_6_archip_BM.log
 31_Tutorial_VU_6_archip_BM.tex

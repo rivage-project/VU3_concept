@@ -5,8 +5,13 @@
 
 <!-- badges: start -->
 
+
+[![DOI](https://zenodo.org/badge/751387651.svg)](https://doi.org/10.5281/zenodo.18598313)
+
 [![License: GPL (\>=
 2)](https://img.shields.io/badge/License-GPL%20%28%3E%3D%202%29-blue.svg)](https://choosealicense.com/licenses/gpl-2.0/)
+
+
 <!-- badges: end -->
 
 <p align="left">
@@ -105,3 +110,4 @@ By contributing to this project, you agree to abide by its terms.
 ## References
 
 **{{ OPTIONAL SECTION }}**
+
